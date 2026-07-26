@@ -9,6 +9,7 @@ import type {
   PurchaseOrder,
   SupplierOffer,
 } from "@/lib/domain";
+import type { CallRecord } from "@/lib/telephony";
 import {
   fallbackBuyerTranscript,
   fallbackOffer,
@@ -176,6 +177,10 @@ export function KaroboliApp() {
   const [selectedSupplier, setSelectedSupplier] = useState(suppliers[0].name);
   const [error, setError] = useState("");
   const [fallbackUsed, setFallbackUsed] = useState(false);
+  const [telephonyConfigured, setTelephonyConfigured] = useState(false);
+  const [callRecord, setCallRecord] = useState<CallRecord | null>(null);
+  const [callBusy, setCallBusy] = useState(false);
+  const callPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const targetRef = useRef<RecordingTarget>("buyer");
@@ -186,15 +191,17 @@ export function KaroboliApp() {
   useEffect(() => {
     fetch("/api/capabilities")
       .then((response) => response.json())
-      .then((data: { sarvam?: boolean; samvaadRealtime?: boolean }) => {
+      .then((data: { sarvam?: boolean; samvaadRealtime?: boolean; telephonyConfigured?: boolean }) => {
         setCapability(data.sarvam || data.samvaadRealtime ? "live" : "offline");
         setRealtimeAvailable(Boolean(data.samvaadRealtime));
         if (data.samvaadRealtime) setVoiceMode("realtime");
+        setTelephonyConfigured(Boolean(data.telephonyConfigured));
       })
       .catch(() => setCapability("offline"));
 
     return () => {
       void liveSessionRef.current?.stop();
+      if (callPollRef.current) clearInterval(callPollRef.current);
     };
   }, []);
 
@@ -505,7 +512,62 @@ export function KaroboliApp() {
     setAgentStatus("idle");
     setError("");
     setFallbackUsed(false);
+    setCallRecord(null);
+    if (callPollRef.current) {
+      clearInterval(callPollRef.current);
+      callPollRef.current = null;
+    }
   }
+
+  async function callSupplier() {
+    if (!requirement || callBusy) return;
+    setCallBusy(true);
+    setError("");
+    const supplierInfo = suppliers.find((s) => s.name === selectedSupplier);
+    try {
+      const response = await fetch("/api/telephony/outbound", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplierName: selectedSupplier,
+          supplierPhone: supplierInfo ? "91-DEMO-9999" : "91-DEMO-9999",
+          requirement,
+        }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error || `Call failed (${response.status})`);
+      }
+      const data = (await response.json()) as { callId: string; record: CallRecord };
+      setCallRecord(data.record);
+
+      // Poll for call status updates
+      if (callPollRef.current) clearInterval(callPollRef.current);
+      callPollRef.current = setInterval(async () => {
+        try {
+          const pollResponse = await fetch(`/api/telephony/calls/${data.callId}`);
+          if (pollResponse.ok) {
+            const pollData = (await pollResponse.json()) as { call: CallRecord };
+            setCallRecord(pollData.call);
+            if (
+              pollData.call.status === "completed" ||
+              pollData.call.status === "failed"
+            ) {
+              clearInterval(callPollRef.current!);
+              callPollRef.current = null;
+            }
+          }
+        } catch {
+          // polling failure is non-fatal
+        }
+      }, 3000);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Call failed.");
+    } finally {
+      setCallBusy(false);
+    }
+  }
+
 
   const requirementReady =
     requirement !== null &&
@@ -984,6 +1046,16 @@ export function KaroboliApp() {
                 <button className="secondary-button" onClick={() => setStage("brief")}>
                   ← Back
                 </button>
+                {telephonyConfigured && (
+                  <button
+                    className="secondary-button"
+                    disabled={!requirement || callBusy}
+                    onClick={() => void callSupplier()}
+                    title="Trigger a live outbound call to the supplier via Sarvam telephony"
+                  >
+                    {callBusy ? "Dialling…" : "📞 Call supplier"}
+                  </button>
+                )}
                 <button
                   className="primary-button"
                   disabled={!offer || offer.needsConfirmation}
@@ -992,6 +1064,26 @@ export function KaroboliApp() {
                   Apply guardrails <span>→</span>
                 </button>
               </div>
+              {callRecord && (
+                <div className={`call-status-badge ${callRecord.status}`} aria-live="polite">
+                  <span>TELEPHONY</span>
+                  <strong>
+                    {callRecord.supplierName} ·{" "}
+                    {callRecord.status === "dialing"
+                      ? "Dialling…"
+                      : callRecord.status === "connected"
+                        ? "Connected"
+                        : callRecord.status === "completed"
+                          ? "✓ Call completed"
+                          : "✗ Call failed"}
+                  </strong>
+                  {callRecord.decision?.action === "human-approval" && (
+                    <span className="escalation-flag">
+                      ⬆ Escalated for human approval
+                    </span>
+                  )}
+                </div>
+              )}
             </section>
           )}
 
@@ -1014,6 +1106,19 @@ export function KaroboliApp() {
                       : "× REJECTED"}
                 </span>
               </header>
+
+              {decision.action === "human-approval" && (
+                <div className="human-approval-banner" role="alert">
+                  <strong>⬆ Human approval required</strong>
+                  <span>
+                    This offer exceeds the autonomous ceiling or has unresolved conditions. A
+                    procurement manager must review and approve before an order is placed.
+                  </span>
+                  <small>
+                    Reasons: {decision.reasons.join(" · ")}
+                  </small>
+                </div>
+              )}
 
               <div className="decision-grid">
                 <div className="policy-panel">

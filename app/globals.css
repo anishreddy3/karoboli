@@ -1416,3 +1416,80 @@ button {
     padding: 0;
   }
 }
+
+/* ── Milestone 4 — Telephony ──────────────────────────────── */
+
+.call-status-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 12px 15px;
+  border: 1px solid #b8d7c6;
+  border-radius: 6px;
+  background: #f1faf5;
+  font-size: 11px;
+}
+
+.call-status-badge > span {
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.09em;
+}
+
+.call-status-badge > strong {
+  font-size: 13px;
+}
+
+.call-status-badge.failed {
+  border-color: #f1c9c4;
+  background: #fff0ee;
+}
+
+.call-status-badge.failed > span {
+  color: var(--red);
+}
+
+.escalation-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: #fff3cd;
+  color: #856404;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.human-approval-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid #f5c518;
+  border-left: 4px solid #f5c518;
+  border-radius: 6px;
+  background: #fff9e6;
+  font-size: 12px;
+}
+
+.human-approval-banner strong {
+  font-size: 14px;
+  color: #92681a;
+}
+
+.human-approval-banner span {
+  color: #5c4020;
+  line-height: 1.5;
+}
+
+.human-approval-banner small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
