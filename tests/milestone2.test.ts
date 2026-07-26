@@ -3,7 +3,10 @@ import test from "node:test";
 import type { BuyerRequirement, SupplierOffer } from "../lib/domain";
 import { nextBuyerQuestion, nextSupplierQuestion } from "../lib/follow-up";
 import { evaluateOffer, buildGuardrails } from "../lib/policy";
-import { reconcileBuyerRequirement } from "../lib/requirement-reconciliation";
+import {
+  dateFromSpokenMonth,
+  reconcileBuyerRequirement,
+} from "../lib/requirement-reconciliation";
 import { reconcileSupplierOffer } from "../lib/supplier-reconciliation";
 
 const baseRequirement: BuyerRequirement = {
@@ -187,4 +190,21 @@ test("verified supplier correction deterministically becomes the final total", (
   );
 
   assert.equal(offer.totalPrice, 40_200);
+});
+
+test("deadline parser understands multilingual and relative date phrases", () => {
+  const cases = [
+    ["జూలై 29 లోపు డెలివరీ కావాలి", "2026-07-29"],
+    ["ஜூலை 29 க்குள் டெலிவரி வேண்டும்", "2026-07-29"],
+    ["29 जुलाई तक डिलीवरी चाहिए", "2026-07-29"],
+    ["Deliver by July twenty ninth", "2026-07-29"],
+    ["Delivery tomorrow", "2026-07-27"],
+    ["Delivery day after tomorrow", "2026-07-28"],
+    ["3 రోజుల్లో డెలివరీ కావాలి", "2026-07-29"],
+    ["Deliver by 29/07/2026", "2026-07-29"],
+  ] as const;
+
+  for (const [spoken, expected] of cases) {
+    assert.equal(dateFromSpokenMonth(spoken), expected, spoken);
+  }
 });

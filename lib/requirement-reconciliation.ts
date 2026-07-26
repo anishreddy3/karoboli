@@ -19,6 +19,8 @@ export const buyerFieldNames = [
   "preferredPaymentTerm",
 ] as const;
 
+const referenceToday = new Date("2026-07-26T00:00:00Z");
+
 function knownString(next: string, previous?: string): string {
   return next.toLowerCase() === "unknown" && previous ? previous : next;
 }
@@ -27,46 +29,168 @@ function knownNumber(next: number, previous?: number): number {
   return next <= 0 && previous && previous > 0 ? previous : next;
 }
 
+const monthAliases: Array<[number, string[]]> = [
+  [1, ["january", "jan", "జనవరి", "ஜனவரி", "जनवरी"]],
+  [2, ["february", "feb", "ఫిబ్రవరి", "பிப்ரவரி", "फरवरी"]],
+  [3, ["march", "mar", "మార్చి", "மார்ச்", "मार्च"]],
+  [4, ["april", "apr", "ఏప్రిల్", "ஏப்ரல்", "अप्रैल"]],
+  [5, ["may", "మే", "மே", "मई"]],
+  [6, ["june", "jun", "జూన్", "ஜூன்", "जून"]],
+  [7, ["july", "jul", "జూలై", "జులై", "ஜூலை", "जुलाई"]],
+  [8, ["august", "aug", "ఆగస్టు", "ஆகஸ்ட்", "अगस्त"]],
+  [9, ["september", "sep", "సెప్టెంబర్", "செப்டம்பர்", "सितंबर"]],
+  [10, ["october", "oct", "అక్టోబర్", "அக்டோபர்", "अक्टूबर"]],
+  [11, ["november", "nov", "నవంబర్", "நவம்பர்", "नवंबर"]],
+  [12, ["december", "dec", "డిసెంబర్", "டிசம்பர்", "दिसंबर"]],
+];
+
+const englishDays: Record<string, number> = {
+  first: 1,
+  second: 2,
+  third: 3,
+  fourth: 4,
+  fifth: 5,
+  sixth: 6,
+  seventh: 7,
+  eighth: 8,
+  ninth: 9,
+  tenth: 10,
+  eleventh: 11,
+  twelfth: 12,
+  thirteenth: 13,
+  fourteenth: 14,
+  fifteenth: 15,
+  sixteenth: 16,
+  seventeenth: 17,
+  eighteenth: 18,
+  nineteenth: 19,
+  twentieth: 20,
+  "twenty first": 21,
+  "twenty-first": 21,
+  "twenty second": 22,
+  "twenty-second": 22,
+  "twenty third": 23,
+  "twenty-third": 23,
+  "twenty fourth": 24,
+  "twenty-fourth": 24,
+  "twenty fifth": 25,
+  "twenty-fifth": 25,
+  "twenty sixth": 26,
+  "twenty-sixth": 26,
+  "twenty seventh": 27,
+  "twenty-seventh": 27,
+  "twenty eighth": 28,
+  "twenty-eighth": 28,
+  "twenty ninth": 29,
+  "twenty-ninth": 29,
+  thirtieth: 30,
+  "thirty first": 31,
+  "thirty-first": 31,
+};
+
+function isoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addReferenceDays(days: number) {
+  const date = new Date(referenceToday);
+  date.setUTCDate(date.getUTCDate() + days);
+  return isoDate(date);
+}
+
+function dayNearMonth(value: string): number | null {
+  const digit = value.match(/\b([0-2]?\d|3[01])(?:st|nd|rd|th)?\b/i);
+  if (digit) return Number(digit[1]);
+  for (const [phrase, day] of Object.entries(englishDays).sort(
+    ([left], [right]) => right.length - left.length,
+  )) {
+    if (value.includes(phrase)) return day;
+  }
+  return null;
+}
+
+function validDate(year: number, month: number, day: number): Date | null {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+    ? date
+    : null;
+}
+
 export function dateFromSpokenMonth(transcript: string): string | null {
-  const monthNumbers: Record<string, number> = {
-    january: 1,
-    february: 2,
-    march: 3,
-    april: 4,
-    may: 5,
-    june: 6,
-    july: 7,
-    august: 8,
-    september: 9,
-    october: 10,
-    november: 11,
-    december: 12,
-  };
-  const monthFirst = transcript.match(
-    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})\b/i,
-  );
-  const dayFirst = transcript.match(
-    /\b(\d{1,2})\s+(january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
-  );
-  const monthName = monthFirst?.[1] || dayFirst?.[2];
-  const dayText = monthFirst?.[2] || dayFirst?.[1];
-  if (!monthName || !dayText) return null;
+  const normalized = transcript.toLowerCase().replace(/\s+/g, " ");
+  const iso = normalized.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+  if (iso) {
+    const exact = validDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+    if (exact) return isoDate(exact);
+  }
 
-  const month = monthNumbers[monthName.toLowerCase()];
-  const day = Number(dayText);
-  if (!month || day < 1 || day > 31) return null;
+  if (
+    /day after tomorrow|ఎల్లుండి|நாளை மறுநாள்|परसों/.test(normalized)
+  ) {
+    return addReferenceDays(2);
+  }
+  if (/\btomorrow\b|రేపు|நாளை|कल/.test(normalized)) {
+    return addReferenceDays(1);
+  }
+  if (/\btoday\b|ఈరోజు|నేడు|இன்று|आज/.test(normalized)) {
+    return addReferenceDays(0);
+  }
 
-  const today = new Date("2026-07-26T00:00:00Z");
-  let year = today.getUTCFullYear();
-  const candidate = new Date(Date.UTC(year, month - 1, day));
-  if (candidate.getTime() < today.getTime()) year += 1;
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const withinDays = normalized.match(
+    /(?:within|in)\s+(\d{1,2})\s+days?|(\d{1,2})\s*(?:రోజుల్లో|நாட்களில்|दिनों में)/,
+  );
+  if (withinDays) {
+    const days = Number(withinDays[1] || withinDays[2]);
+    if (days >= 0 && days <= 90) return addReferenceDays(days);
+  }
+
+  const numeric = normalized.match(
+    /\b([0-3]?\d)[./-]([01]?\d)(?:[./-](20\d{2}))?\b/,
+  );
+  if (numeric) {
+    const day = Number(numeric[1]);
+    const month = Number(numeric[2]);
+    let year = Number(numeric[3] || referenceToday.getUTCFullYear());
+    let date = validDate(year, month, day);
+    if (date && date < referenceToday && !numeric[3]) {
+      year += 1;
+      date = validDate(year, month, day);
+    }
+    if (date) return isoDate(date);
+  }
+
+  for (const [month, aliases] of monthAliases) {
+    for (const alias of aliases) {
+      const position = normalized.indexOf(alias);
+      if (position < 0) continue;
+      const nearby = normalized.slice(
+        Math.max(0, position - 32),
+        Math.min(normalized.length, position + alias.length + 32),
+      );
+      const day = dayNearMonth(nearby);
+      if (!day) continue;
+      const explicitYear = nearby.match(/\b(20\d{2})\b/);
+      let year = Number(
+        explicitYear?.[1] || referenceToday.getUTCFullYear(),
+      );
+      let date = validDate(year, month, day);
+      if (date && date < referenceToday && !explicitYear) {
+        year += 1;
+        date = validDate(year, month, day);
+      }
+      if (date) return isoDate(date);
+    }
+  }
+
+  return null;
 }
 
 export function dateIsPlausible(value: string): boolean {
   if (value === "unknown") return false;
   const date = new Date(`${value}T00:00:00Z`);
-  const earliest = new Date("2026-07-26T00:00:00Z").getTime();
+  const earliest = referenceToday.getTime();
   const latest = new Date("2027-07-26T00:00:00Z").getTime();
   return (
     !Number.isNaN(date.getTime()) &&
