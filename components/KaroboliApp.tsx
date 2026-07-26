@@ -231,6 +231,7 @@ export function KaroboliApp() {
       form.set("audio", audio, `karoboli-${target}.wav`);
       form.set("mode", "codemix");
       form.set("language", target === "buyer" ? language : "unknown");
+      form.set("purpose", target);
       const transcriptResponse = await fetch("/api/speech/transcribe", {
         method: "POST",
         body: form,
@@ -238,11 +239,14 @@ export function KaroboliApp() {
       if (!transcriptResponse.ok) throw new Error(await readError(transcriptResponse));
       const transcriptData = (await transcriptResponse.json()) as {
         transcript: string;
+        normalized_transcript?: string;
       };
 
       if (target === "buyer") {
         setBuyerTranscript(transcriptData.transcript);
-        await understandBuyer(transcriptData.transcript);
+        await understandBuyer(
+          transcriptData.normalized_transcript || transcriptData.transcript,
+        );
       } else {
         setSupplierTranscript(transcriptData.transcript);
         await understandSupplier(transcriptData.transcript);

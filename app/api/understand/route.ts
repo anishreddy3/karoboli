@@ -23,7 +23,119 @@ const requestSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-const paymentTerms = ["advance", "delivery", "net-7", "net-15", "net-30"];
+const paymentTerms = ["advance", "delivery", "net-7", "net-15", "net-30"] as const;
+const buyerFieldNames = [
+  "product",
+  "specification",
+  "quantity",
+  "unit",
+  "deliveryLocation",
+  "requiredBy",
+  "maximumBudget",
+  "preferredPaymentTerm",
+] as const;
+
+function dateFromSpokenMonth(transcript: string): string | null {
+  const monthNumbers: Record<string, number> = {
+    january: 1,
+    february: 2,
+    march: 3,
+    april: 4,
+    may: 5,
+    june: 6,
+    july: 7,
+    august: 8,
+    september: 9,
+    october: 10,
+    november: 11,
+    december: 12,
+  };
+  const monthFirst = transcript.match(
+    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})\b/i,
+  );
+  const dayFirst = transcript.match(
+    /\b(\d{1,2})\s+(january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
+  );
+  const monthName = monthFirst?.[1] || dayFirst?.[2];
+  const dayText = monthFirst?.[2] || dayFirst?.[1];
+  if (!monthName || !dayText) return null;
+
+  const month = monthNumbers[monthName.toLowerCase()];
+  const day = Number(dayText);
+  if (!month || day < 1 || day > 31) return null;
+
+  const today = new Date("2026-07-26T00:00:00Z");
+  let year = today.getUTCFullYear();
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (candidate.getTime() < today.getTime()) year += 1;
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function dateIsPlausible(value: string): boolean {
+  if (value === "unknown") return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  const earliest = new Date("2026-07-26T00:00:00Z").getTime();
+  const latest = new Date("2027-07-26T00:00:00Z").getTime();
+  return (
+    !Number.isNaN(date.getTime()) &&
+    date.getTime() >= earliest &&
+    date.getTime() <= latest
+  );
+}
+
+function paymentTermFromTranscript(
+  transcript: string,
+): (typeof paymentTerms)[number] | null {
+  const normalized = transcript.toLowerCase();
+  if (
+    /\b(?:payment|pay|paid|cash)\b.{0,24}\b(?:on|upon|at)\s+delivery\b/.test(
+      normalized,
+    )
+  ) {
+    return "delivery";
+  }
+  if (/\badvance(?:\s+payment)?\b|\bpayment\s+in\s+advance\b/.test(normalized)) {
+    return "advance";
+  }
+  const netTerm = normalized.match(/\bnet[\s-]?(7|15|30)\b/);
+  return netTerm ? (`net-${netTerm[1]}` as (typeof paymentTerms)[number]) : null;
+}
+
+function reconcileBuyerRequirement(
+  raw: unknown,
+  transcript: string,
+) {
+  const requirement = buyerRequirementSchema.parse(raw);
+  if (!dateIsPlausible(requirement.requiredBy)) {
+    requirement.requiredBy = dateFromSpokenMonth(transcript) || "unknown";
+  }
+  if (requirement.preferredPaymentTerm === "unknown") {
+    requirement.preferredPaymentTerm =
+      paymentTermFromTranscript(transcript) || "unknown";
+  }
+
+  const missing = new Set<(typeof buyerFieldNames)[number]>();
+  if (requirement.product.toLowerCase() === "unknown") missing.add("product");
+  if (requirement.specification.toLowerCase() === "unknown") {
+    missing.add("specification");
+  }
+  if (requirement.quantity <= 0) missing.add("quantity");
+  if (requirement.unit.toLowerCase() === "unknown") missing.add("unit");
+  if (requirement.deliveryLocation.toLowerCase() === "unknown") {
+    missing.add("deliveryLocation");
+  }
+  if (!dateIsPlausible(requirement.requiredBy)) missing.add("requiredBy");
+  if (requirement.maximumBudget <= 0) missing.add("maximumBudget");
+  if (requirement.preferredPaymentTerm === "unknown") {
+    missing.add("preferredPaymentTerm");
+  }
+
+  requirement.missingFields = buyerFieldNames.filter((field) =>
+    missing.has(field),
+  );
+  requirement.needsConfirmation = requirement.missingFields.length > 0;
+  return requirement;
+}
 
 const buyerJsonSchema = {
   name: "buyer_requirement",
@@ -144,27 +256,53 @@ async function structuredCompletion(
   system: string,
   user: string,
 ) {
-  const response = await sarvamFetch("/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: process.env.SARVAM_CHAT_MODEL || "sarvam-30b",
-      reasoning_effort: null,
-      temperature: 0.05,
-      max_tokens: 1000,
-      response_format: { type: "json_schema", json_schema: schema },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-    }),
-  });
-  const result = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  const content = result.choices?.[0]?.message?.content;
-  if (!content) throw new Error("Sarvam returned no structured content.");
-  return JSON.parse(content);
+  let parseError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await sarvamFetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: process.env.SARVAM_CHAT_MODEL || "sarvam-30b",
+        reasoning_effort: null,
+        temperature: 0.05,
+        max_tokens: attempt === 0 ? 1600 : 2200,
+        response_format: { type: "json_schema", json_schema: schema },
+        messages: [
+          {
+            role: "system",
+            content:
+              system +
+              (attempt === 0
+                ? ""
+                : " Return exactly one compact JSON object with no markdown, commentary, or trailing text."),
+          },
+          { role: "user", content: user },
+        ],
+      }),
+    });
+    const result = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const content = result.choices?.[0]?.message?.content;
+    if (!content) {
+      parseError = new Error("Sarvam returned no structured content.");
+      continue;
+    }
+
+    try {
+      return JSON.parse(content);
+    } catch (error) {
+      parseError = error;
+      console.warn(
+        `Sarvam returned malformed structured content on attempt ${attempt + 1}; retrying.`,
+      );
+    }
+  }
+
+  throw parseError instanceof Error
+    ? parseError
+    : new Error("Sarvam returned invalid structured content.");
 }
 
 export async function POST(request: Request) {
@@ -191,7 +329,9 @@ export async function POST(request: Request) {
         ].join(" "),
         parsed.data.transcript,
       );
-      return Response.json({ requirement: buyerRequirementSchema.parse(data) });
+      return Response.json({
+        requirement: reconcileBuyerRequirement(data, parsed.data.transcript),
+      });
     }
 
     const data = await structuredCompletion(
