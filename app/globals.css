@@ -692,7 +692,64 @@ button {
   color: var(--green);
 }
 
+.case-memory-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 38px;
+  border-bottom: 1px solid #d8e8e1;
+  background: #f3faf7;
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+}
+
+.case-memory-bar > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.case-memory-bar i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgb(31 107 77 / 10%);
+}
+
+.case-memory-bar small {
+  color: var(--muted);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 9px;
+}
+
+.case-memory-bar.loading i,
+.case-memory-bar.saving i {
+  animation: pulse-memory 1s ease-in-out infinite alternate;
+}
+
+.case-memory-bar.unavailable {
+  border-bottom-color: #f1c9c4;
+  background: #fff0ee;
+}
+
+.case-memory-bar.unavailable,
+.case-memory-bar.unavailable small {
+  color: var(--red);
+}
+
+@keyframes pulse-memory {
+  to {
+    opacity: 0.35;
+  }
+}
+
 .fallback-banner,
+.handoff-banner,
 .error-banner {
   display: flex;
   align-items: center;
@@ -709,6 +766,21 @@ button {
 
 .fallback-banner span {
   color: #766746;
+}
+
+.handoff-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 38px;
+  border-bottom: 1px solid #bfe2d2;
+  background: #eefaf4;
+  color: var(--green);
+  font-size: 11px;
+}
+
+.handoff-banner span {
+  color: var(--muted);
 }
 
 .error-banner {
@@ -1569,6 +1641,12 @@ button {
     width: 100%;
   }
 
+  .case-memory-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 10px 20px;
+  }
+
   .hero {
     padding: 54px 20px 42px;
   }
@@ -1663,6 +1741,7 @@ button {
   .topbar,
   .hero,
   .steps,
+  .case-memory-bar,
   .stage-actions,
   .score-strip,
   .site-footer {

@@ -22,7 +22,8 @@ Select Telugu. Say:
 > delivery. Maximum budget forty one thousand rupees, payment delivery appudu.”
 
 Show the verbatim transcript and extracted item, quantity, location, deadline,
-budget, and payment term.
+budget, and payment term. The complete brief automatically advances to supplier
+matching; point to the Cloudflare D1 memory indicator before continuing.
 
 ## 1:25–1:55 — Supplier correction
 
@@ -60,6 +61,9 @@ Point to the SHA-256 evidence record.
 “The conversation is not the output. A verifiable business action is. Karoboli
 is the procurement bridge between how India speaks and how a company safely
 buys.”
+
+If asked about memory, reload once after the decision: the same case, transcripts,
+commitments, decision and PO are restored from Cloudflare D1.
 
 ## Backup
 

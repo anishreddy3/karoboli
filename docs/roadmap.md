@@ -25,6 +25,9 @@ awaits the provisioned organization, workspace, and committed Samvaad app ID.
 - Expose deterministic Karoboli functions as authenticated Samvaad tools.
 - Run three unseen repeat cases: Telugu buyer, Tamil buyer, and English buyer;
   each with a Hinglish supplier reply.
+- Persist versioned buyer and supplier case memory in Cloudflare D1.
+- Serialize live transcript turns and automatically hand a complete buyer brief
+  to supplier matching.
 
 ## Milestone 3 — Supporting Sarvam agents
 
@@ -82,3 +85,5 @@ onto the previous completed milestone before implementation begins.
 
 See [the Sarvam agent integration strategy](./sarvam-agent-integration.md) for
 the provider options, required account values, and fallback architecture.
+See [buyer and supplier memory](./memory-and-context.md) for the implemented D1
+record, identity scope and production access-control boundary.

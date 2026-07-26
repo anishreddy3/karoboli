@@ -26,6 +26,13 @@ import {
   type SamvaadRole,
   type SamvaadStatus,
 } from "@/lib/samvaad-browser";
+import {
+  CASE_MEMORY_SCHEMA_VERSION,
+  caseMemorySchema,
+  isBuyerRequirementReady,
+  safeStageForMemory,
+  type StoredCaseMemory,
+} from "@/lib/case-memory";
 import { DealRoom } from "./DealRoom";
 
 type Stage = "brief" | "supplier" | "decision";
@@ -33,6 +40,15 @@ type RecordingTarget = "buyer" | "supplier";
 type CapabilityStatus = "checking" | "live" | "offline";
 type BuyerLanguage = Language | "unknown";
 type VoiceMode = "realtime" | "composed";
+type MemoryStatus =
+  | "loading"
+  | "new"
+  | "restored"
+  | "saving"
+  | "saved"
+  | "unavailable";
+
+const CASE_ID_STORAGE_KEY = "karoboli.case-id.v1";
 
 const suppliers = [
   {
@@ -177,12 +193,18 @@ export function KaroboliApp() {
   const [selectedSupplier, setSelectedSupplier] = useState(suppliers[0].name);
   const [error, setError] = useState("");
   const [fallbackUsed, setFallbackUsed] = useState(false);
+  const [caseId, setCaseId] = useState<string | null>(null);
+  const [memoryReady, setMemoryReady] = useState(false);
+  const [memoryStatus, setMemoryStatus] = useState<MemoryStatus>("loading");
+  const [handoffPending, setHandoffPending] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const targetRef = useRef<RecordingTarget>("buyer");
   const liveSessionRef = useRef<SamvaadBrowserSession | null>(null);
   const requirementRef = useRef<BuyerRequirement | null>(null);
   const offerRef = useRef<SupplierOffer | null>(null);
+  const buyerUnderstandQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const supplierUnderstandQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     fetch("/api/capabilities")
@@ -198,6 +220,111 @@ export function KaroboliApp() {
       void liveSessionRef.current?.stop();
     };
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let nextCaseId = window.localStorage.getItem(CASE_ID_STORAGE_KEY);
+    if (!nextCaseId) {
+      nextCaseId = crypto.randomUUID();
+      window.localStorage.setItem(CASE_ID_STORAGE_KEY, nextCaseId);
+    }
+    fetch(`/api/case-memory?id=${encodeURIComponent(nextCaseId)}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (response.status === 404) return null;
+        if (!response.ok) throw new Error(await readError(response));
+        const data = (await response.json()) as { memory?: unknown };
+        const parsed = caseMemorySchema.safeParse(data.memory);
+        return parsed.success
+          ? ({ ...data.memory, ...parsed.data } as StoredCaseMemory)
+          : null;
+      })
+      .then((memory) => {
+        if (controller.signal.aborted) return;
+        setCaseId(nextCaseId);
+        if (memory) {
+          setLanguage(memory.language);
+          setSelectedSupplier(memory.selectedSupplier);
+          setBuyerTranscript(memory.buyerTranscript);
+          setSupplierTranscript(memory.supplierTranscript);
+          setRequirement(memory.requirement);
+          setOffer(memory.offer);
+          setDecision(memory.decision);
+          setPurchaseOrder(memory.purchaseOrder);
+          setEvidence(memory.evidence);
+          setFallbackUsed(memory.fallbackUsed);
+          requirementRef.current = memory.requirement;
+          offerRef.current = memory.offer;
+          setStage(safeStageForMemory(memory));
+          setMemoryStatus("restored");
+        } else {
+          setMemoryStatus("new");
+        }
+        setMemoryReady(true);
+      })
+      .catch((caught) => {
+        if (controller.signal.aborted) return;
+        console.error("case-memory-hydrate", caught);
+        setMemoryStatus("unavailable");
+        setMemoryReady(true);
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!memoryReady || !caseId) return;
+    const timer = window.setTimeout(() => {
+      setMemoryStatus("saving");
+      fetch("/api/case-memory", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: caseId,
+          memory: {
+            schemaVersion: CASE_MEMORY_SCHEMA_VERSION,
+            stage,
+            language,
+            selectedSupplier,
+            buyerTranscript,
+            supplierTranscript,
+            requirement,
+            offer,
+            decision,
+            purchaseOrder,
+            evidence,
+            fallbackUsed,
+          },
+        }),
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error(await readError(response));
+          setMemoryStatus("saved");
+        })
+        .catch((caught) => {
+          console.error("case-memory-save", caught);
+          setMemoryStatus("unavailable");
+        });
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    buyerTranscript,
+    caseId,
+    decision,
+    evidence,
+    fallbackUsed,
+    language,
+    memoryReady,
+    offer,
+    purchaseOrder,
+    requirement,
+    selectedSupplier,
+    stage,
+    supplierTranscript,
+  ]);
 
   async function startRecording(target: RecordingTarget) {
     setError("");
@@ -290,7 +417,10 @@ export function KaroboliApp() {
     }
   }
 
-  async function understandBuyer(transcript: string) {
+  async function understandBuyer(
+    transcript: string,
+    autoAdvance = false,
+  ) {
     const response = await fetch("/api/understand", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -305,10 +435,20 @@ export function KaroboliApp() {
     const data = (await response.json()) as { requirement: BuyerRequirement };
     requirementRef.current = data.requirement;
     setRequirement(data.requirement);
+    if (autoAdvance && isBuyerRequirementReady(data.requirement)) {
+      setHandoffPending(true);
+      try {
+        await stopLiveAgent();
+      } finally {
+        setStage("supplier");
+        setHandoffPending(false);
+      }
+    }
   }
 
   async function understandSupplier(transcript: string) {
-    if (!requirement) throw new Error("Capture the buyer brief first.");
+    const activeRequirement = requirementRef.current;
+    if (!activeRequirement) throw new Error("Capture the buyer brief first.");
     const response = await fetch("/api/understand", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -317,7 +457,7 @@ export function KaroboliApp() {
         transcript,
         language: "hi-IN",
         supplierName: selectedSupplier,
-        buyerRequirement: requirement,
+        buyerRequirement: activeRequirement,
         existingOffer: offerRef.current,
       }),
     });
@@ -325,6 +465,30 @@ export function KaroboliApp() {
     const data = (await response.json()) as { offer: SupplierOffer };
     offerRef.current = data.offer;
     setOffer(data.offer);
+  }
+
+  function queueBuyerUnderstanding(transcript: string) {
+    buyerUnderstandQueueRef.current = buyerUnderstandQueueRef.current
+      .then(() => understandBuyer(transcript, true))
+      .catch((caught) => {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "The live buyer brief could not be structured.",
+        );
+      });
+  }
+
+  function queueSupplierUnderstanding(transcript: string) {
+    supplierUnderstandQueueRef.current = supplierUnderstandQueueRef.current
+      .then(() => understandSupplier(transcript))
+      .catch((caught) => {
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "The live supplier offer could not be structured.",
+        );
+      });
   }
 
   async function stopLiveAgent() {
@@ -369,12 +533,12 @@ export function KaroboliApp() {
             setBuyerTranscript((current) =>
               current ? `${current}\n${content}` : content,
             );
-            void understandBuyer(content);
+            queueBuyerUnderstanding(content);
           } else {
             setSupplierTranscript((current) =>
               current ? `${current}\n${content}` : content,
             );
-            void understandSupplier(content);
+            queueSupplierUnderstanding(content);
           }
         },
       },
@@ -491,6 +655,16 @@ export function KaroboliApp() {
   }
 
   function reset() {
+    const previousCaseId = caseId;
+    const nextCaseId = crypto.randomUUID();
+    window.localStorage.setItem(CASE_ID_STORAGE_KEY, nextCaseId);
+    setCaseId(nextCaseId);
+    setMemoryStatus("new");
+    if (previousCaseId) {
+      void fetch(`/api/case-memory?id=${encodeURIComponent(previousCaseId)}`, {
+        method: "DELETE",
+      }).catch(() => undefined);
+    }
     void stopLiveAgent();
     setStage("brief");
     setBuyerTranscript("");
@@ -506,15 +680,10 @@ export function KaroboliApp() {
     setAgentStatus("idle");
     setError("");
     setFallbackUsed(false);
+    setHandoffPending(false);
   }
 
-  const requirementReady =
-    requirement !== null &&
-    !requirement.needsConfirmation &&
-    requirement.quantity > 0 &&
-    requirement.maximumBudget > 0 &&
-    requirement.requiredBy !== "unknown" &&
-    requirement.preferredPaymentTerm !== "unknown";
+  const requirementReady = isBuyerRequirementReady(requirement);
   const guardrails = requirementReady ? buildGuardrails(requirement) : null;
   const stepNumber = stage === "brief" ? 1 : stage === "supplier" ? 2 : 3;
   const buyerQuestion = nextBuyerQuestion(requirement);
@@ -615,6 +784,26 @@ export function KaroboliApp() {
         </aside>
 
         <div className="stage-card">
+          <div className={`case-memory-bar ${memoryStatus}`}>
+            <span>
+              <i />
+              CLOUDFLARE D1 CASE MEMORY
+            </span>
+            <small>
+              {memoryStatus === "loading"
+                ? "Finding your active case…"
+                : memoryStatus === "restored"
+                  ? "Case restored across sessions"
+                  : memoryStatus === "saving"
+                    ? "Saving buyer and supplier context…"
+                    : memoryStatus === "saved"
+                      ? "Buyer brief, offer and commitments saved"
+                      : memoryStatus === "unavailable"
+                        ? "Memory unavailable · live workflow still works"
+                        : "New private case"}
+              {caseId ? ` · ${caseId.slice(0, 8).toUpperCase()}` : ""}
+            </small>
+          </div>
           {realtimeAvailable && (
             <div className="provider-switch" aria-label="Voice provider">
               <span>VOICE PATH</span>
@@ -645,6 +834,12 @@ export function KaroboliApp() {
               <span>
                 This is a deterministic backup, not a live Sarvam result.
               </span>
+            </div>
+          )}
+          {handoffPending && (
+            <div className="handoff-banner" role="status">
+              <strong>Buyer requirement complete</strong>
+              <span>Saving the case and opening supplier matches…</span>
             </div>
           )}
           {error && (
