@@ -12,6 +12,7 @@
     "test": "npm run build && node --test tests/rendered-html.test.mjs && npm run test:domain && npm run test:gateway",
     "test:domain": "tsx --test tests/milestone2.test.ts",
     "test:milestone4": "tsx --test tests/milestone4.test.ts",
+    "test:milestone5": "tsx --test tests/milestone5.test.ts",
     "test:gateway": "PYTHONPATH=gateway python3 -m unittest discover -s gateway/tests -v",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "check": "npm run lint && npm test"
