@@ -1,0 +1,6 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="14" fill="#17221D"/>
+  <path d="M18 16H46V21H35V46H29V21H18V16Z" fill="#D8FF65" opacity=".16"/>
+  <text x="32" y="43" fill="#D8FF65" font-family="Arial, sans-serif" font-size="31" font-weight="700" text-anchor="middle">क</text>
+  <circle cx="50" cy="14" r="5" fill="#E86331"/>
+</svg>
