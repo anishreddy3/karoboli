@@ -192,6 +192,76 @@ test("verified supplier correction deterministically becomes the final total", (
   assert.equal(offer.totalPrice, 40_200);
 });
 
+test("evaluateOffer rejection path handles single and multiple check failures", () => {
+  const guardrails = buildGuardrails(baseRequirement);
+
+  const baseOffer: SupplierOffer = {
+    supplierName: "Test Supplier",
+    totalPrice: 40_000,
+    unitPrice: 200,
+    deliveryDate: "2026-07-28",
+    paymentTerm: "delivery",
+    freightIncluded: true,
+    unloadingIncluded: true,
+    gstIncluded: true,
+    commitments: [],
+    corrections: [],
+    unresolvedQuestions: [],
+    normalizedSummary: "Complete test offer",
+    needsConfirmation: false,
+  };
+
+  // Test individual failures
+  const budgetFailure = evaluateOffer(
+    { ...baseOffer, totalPrice: 42_000 },
+    guardrails,
+  );
+  assert.equal(budgetFailure.action, "reject");
+  // Total price fails both budget and autonomy
+  assert.deepEqual(budgetFailure.reasons, ["Absolute budget", "Autonomy ceiling"]);
+
+  const deliveryFailure = evaluateOffer(
+    { ...baseOffer, deliveryDate: "2026-07-30" },
+    guardrails,
+  );
+  assert.equal(deliveryFailure.action, "reject");
+  assert.deepEqual(deliveryFailure.reasons, ["Delivery deadline"]);
+
+  const paymentFailure = evaluateOffer(
+    { ...baseOffer, paymentTerm: "advance" },
+    guardrails,
+  );
+  assert.equal(paymentFailure.action, "reject");
+  assert.deepEqual(paymentFailure.reasons, ["Payment term"]);
+
+  const freightFailure = evaluateOffer(
+    { ...baseOffer, freightIncluded: false },
+    guardrails,
+  );
+  assert.equal(freightFailure.action, "reject");
+  assert.deepEqual(freightFailure.reasons, ["Freight included"]);
+
+  // Test multiple simultaneous failures
+  const multipleFailure = evaluateOffer(
+    {
+      ...baseOffer,
+      totalPrice: 42_000,
+      deliveryDate: "2026-07-30",
+      paymentTerm: "advance",
+      freightIncluded: false,
+    },
+    guardrails,
+  );
+  assert.equal(multipleFailure.action, "reject");
+  assert.deepEqual(multipleFailure.reasons, [
+    "Absolute budget",
+    "Autonomy ceiling",
+    "Delivery deadline",
+    "Payment term",
+    "Freight included",
+  ]);
+});
+
 test("deadline parser understands multilingual and relative date phrases", () => {
   const cases = [
     ["జూలై 29 లోపు డెలివరీ కావాలి", "2026-07-29"],
