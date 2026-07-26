@@ -30,7 +30,7 @@ LANGUAGES = {
     "kok-IN": SarvamToolLanguageName.KONKANI,
     "ml-IN": SarvamToolLanguageName.MALAYALAM,
     "mr-IN": SarvamToolLanguageName.MARATHI,
-    "or-IN": SarvamToolLanguageName.ODIA,
+    "od-IN": SarvamToolLanguageName.ODIA,
     "pa-IN": SarvamToolLanguageName.PUNJABI,
     "ta-IN": SarvamToolLanguageName.TAMIL,
     "te-IN": SarvamToolLanguageName.TELUGU,

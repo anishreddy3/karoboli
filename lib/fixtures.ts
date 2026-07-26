@@ -3,8 +3,14 @@ import type { BuyerRequirement, SupplierOffer } from "./domain";
 export const fallbackBuyerTranscript =
   "Naaku 200 bags 53 grade cement kavali, Whitefield site ki July 29 lopu delivery. Maximum budget forty one thousand rupees, payment delivery appudu.";
 
+export const fallbackBuyerEnglishTranscript =
+  "I need 200 bags of 53 grade cement delivered to the Whitefield site by July 29. The maximum budget is ₹41,000, with payment on delivery.";
+
 export const fallbackSupplierTranscript =
   "Sir total forty thousand eight hundred—nahi, correction forty thousand two hundred. Freight aur unloading included hai. GST bhi included. July twenty eighth delivery, payment on delivery.";
+
+export const fallbackSupplierEnglishTranscript =
+  "The total is ₹40,800—no, correction: ₹40,200. Freight, unloading, and GST are included. Delivery is July 28, with payment on delivery.";
 
 export const fallbackRequirement: BuyerRequirement = {
   product: "OPC cement",

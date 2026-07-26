@@ -16,7 +16,10 @@ const completeMemory = {
   language: "te-IN" as const,
   selectedSupplier: fallbackOffer.supplierName,
   buyerTranscript: "Complete buyer brief",
+  buyerEnglishTranscript: "Complete buyer brief in English",
   supplierTranscript: "",
+  supplierEnglishTranscript: "",
+  sellerBriefLanguage: "te-IN" as const,
   requirement: fallbackRequirement,
   offer: null,
   decision: null,
@@ -77,6 +80,7 @@ test("supplier case projection removes buyer-private memory before transport", (
     ...completeMemory,
     stage: "decision",
     buyerTranscript: "Private buyer ceiling is ₹41,000",
+    buyerEnglishTranscript: "Private buyer ceiling is ₹41,000",
     offer: fallbackOffer,
     decision: {
       action: "human-approval",
@@ -96,6 +100,7 @@ test("supplier case projection removes buyer-private memory before transport", (
   assert.equal(visible.requirement?.maximumBudget, 0);
   assert.deepEqual(visible.requirement?.constraints, []);
   assert.equal(visible.buyerTranscript, "");
+  assert.equal(visible.buyerEnglishTranscript, "");
   assert.equal(visible.evidence, null);
   assert.deepEqual(visible.decision?.reasons, []);
   assert.deepEqual(visible.decision?.checks, []);

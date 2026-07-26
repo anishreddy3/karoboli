@@ -15,6 +15,13 @@
       "when": 1785057254784,
       "tag": "0001_slim_lady_ursula",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785061003171,
+      "tag": "0002_aberrant_mindworm",
+      "breakpoints": true
     }
   ]
 }

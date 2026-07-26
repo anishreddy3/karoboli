@@ -7,14 +7,17 @@ import type {
   EvidenceRecord,
   Language,
   PurchaseOrder,
+  SpeechLanguage,
   SupplierOffer,
 } from "@/lib/domain";
 import type { CallRecord } from "@/lib/telephony";
 import {
   fallbackBuyerTranscript,
+  fallbackBuyerEnglishTranscript,
   fallbackOffer,
   fallbackRequirement,
   fallbackSupplierTranscript,
+  fallbackSupplierEnglishTranscript,
 } from "@/lib/fixtures";
 import {
   buildGuardrails,
@@ -41,6 +44,7 @@ type RecordingTarget = "buyer" | "supplier";
 type CapabilityStatus = "checking" | "live" | "offline";
 type BuyerLanguage = Language | "unknown";
 type VoiceMode = "realtime" | "composed";
+type BriefPlayback = "idle" | "loading" | "playing";
 type MemoryStatus =
   | "loading"
   | "new"
@@ -125,6 +129,75 @@ const languageLabels: Record<BuyerLanguage, string> = {
   "hi-IN": "Hindi / Hinglish",
   "en-IN": "English",
 };
+
+const speechLanguageLabels: Record<SpeechLanguage, string> = {
+  "bn-IN": "Bengali",
+  "en-IN": "English",
+  "gu-IN": "Gujarati",
+  "hi-IN": "Hindi",
+  "kn-IN": "Kannada",
+  "ml-IN": "Malayalam",
+  "mr-IN": "Marathi",
+  "od-IN": "Odia",
+  "pa-IN": "Punjabi",
+  "ta-IN": "Tamil",
+  "te-IN": "Telugu",
+};
+
+function normalizeTranscript(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+}
+
+function appendUniqueTranscript(current: string, next: string) {
+  const cleanNext = next.trim();
+  if (!cleanNext) return current;
+  if (!current.trim()) return cleanNext;
+
+  const lines = current.split("\n").filter((line) => line.trim());
+  const last = lines.at(-1) || "";
+  const normalizedNext = normalizeTranscript(cleanNext);
+  const normalizedLast = normalizeTranscript(last);
+
+  if (
+    lines.some((line) => normalizeTranscript(line) === normalizedNext) ||
+    normalizedLast.startsWith(normalizedNext)
+  ) {
+    return current;
+  }
+  if (normalizedNext.startsWith(normalizedLast)) {
+    return [...lines.slice(0, -1), cleanNext].join("\n");
+  }
+  return `${current}\n${cleanNext}`;
+}
+
+function TranscriptPair({
+  original,
+  english,
+  originalLabel,
+}: {
+  original: string;
+  english: string;
+  originalLabel: string;
+}) {
+  const showEnglish =
+    Boolean(english.trim()) &&
+    normalizeTranscript(english) !== normalizeTranscript(original);
+
+  return (
+    <div className={`transcript-pair ${showEnglish ? "" : "single"}`}>
+      <div className="transcript-block">
+        <span>{originalLabel}</span>
+        <blockquote>“{original}”</blockquote>
+      </div>
+      {showEnglish && (
+        <div className="transcript-block translation">
+          <span>ENGLISH TRANSLATION</span>
+          <blockquote>“{english}”</blockquote>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function money(value: number) {
   return `₹${value.toLocaleString("en-IN")}`;
@@ -228,10 +301,16 @@ export function KaroboliApp() {
   const [agentStatus, setAgentStatus] = useState<SamvaadStatus>("idle");
   const [agentText, setAgentText] = useState("");
   const [language, setLanguage] = useState<BuyerLanguage>("unknown");
+  const [sellerBriefLanguage, setSellerBriefLanguage] =
+    useState<SpeechLanguage>("en-IN");
+  const [briefPlayback, setBriefPlayback] =
+    useState<BriefPlayback>("idle");
   const [recording, setRecording] = useState<RecordingTarget | null>(null);
-  const [busy, setBusy] = useState<RecordingTarget | "voice" | null>(null);
+  const [busy, setBusy] = useState<RecordingTarget | null>(null);
   const [buyerTranscript, setBuyerTranscript] = useState("");
+  const [buyerEnglishTranscript, setBuyerEnglishTranscript] = useState("");
   const [supplierTranscript, setSupplierTranscript] = useState("");
+  const [supplierEnglishTranscript, setSupplierEnglishTranscript] = useState("");
   const [requirement, setRequirement] = useState<BuyerRequirement | null>(null);
   const [offer, setOffer] = useState<SupplierOffer | null>(null);
   const [decision, setDecision] = useState<Decision | null>(null);
@@ -251,6 +330,9 @@ export function KaroboliApp() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const targetRef = useRef<RecordingTarget>("buyer");
+  const briefAudioRef = useRef<HTMLAudioElement | null>(null);
+  const briefAudioUrlRef = useRef<string | null>(null);
+  const briefAbortRef = useRef<AbortController | null>(null);
   const liveSessionRef = useRef<SamvaadBrowserSession | null>(null);
   const requirementRef = useRef<BuyerRequirement | null>(null);
   const offerRef = useRef<SupplierOffer | null>(null);
@@ -270,9 +352,14 @@ export function KaroboliApp() {
 
     return () => {
       void liveSessionRef.current?.stop();
+      stopAgentBrief();
       if (callPollRef.current) clearInterval(callPollRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (stage !== "supplier") stopAgentBrief();
+  }, [stage]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -309,8 +396,11 @@ export function KaroboliApp() {
         if (memory) {
           setLanguage(memory.language);
           setSelectedSupplier(memory.selectedSupplier);
+          setSellerBriefLanguage(memory.sellerBriefLanguage);
           setBuyerTranscript(memory.buyerTranscript);
+          setBuyerEnglishTranscript(memory.buyerEnglishTranscript);
           setSupplierTranscript(memory.supplierTranscript);
+          setSupplierEnglishTranscript(memory.supplierEnglishTranscript);
           setRequirement(memory.requirement);
           setOffer(memory.offer);
           setDecision(memory.decision);
@@ -351,7 +441,10 @@ export function KaroboliApp() {
             language,
             selectedSupplier,
             buyerTranscript,
+            buyerEnglishTranscript,
             supplierTranscript,
+            supplierEnglishTranscript,
+            sellerBriefLanguage,
             requirement,
             offer,
             decision,
@@ -374,6 +467,7 @@ export function KaroboliApp() {
     return () => window.clearTimeout(timer);
   }, [
     buyerTranscript,
+    buyerEnglishTranscript,
     caseId,
     decision,
     evidence,
@@ -384,8 +478,10 @@ export function KaroboliApp() {
     purchaseOrder,
     requirement,
     selectedSupplier,
+    sellerBriefLanguage,
     stage,
     supplierTranscript,
+    supplierEnglishTranscript,
   ]);
 
   async function startRecording(target: RecordingTarget) {
@@ -452,26 +548,36 @@ export function KaroboliApp() {
       if (!transcriptResponse.ok) throw new Error(await readError(transcriptResponse));
       const transcriptData = (await transcriptResponse.json()) as {
         transcript: string;
+        english_transcript?: string;
         normalized_transcript?: string;
       };
+      const englishTranscript =
+        transcriptData.english_transcript ||
+        (transcriptData.normalized_transcript !== transcriptData.transcript
+          ? transcriptData.normalized_transcript
+          : "");
 
       if (target === "buyer") {
-        setBuyerTranscript((current) => {
-          const segment = transcriptData.normalized_transcript && transcriptData.normalized_transcript !== transcriptData.transcript
-            ? `${transcriptData.transcript}\n> Translation: ${transcriptData.normalized_transcript}`
-            : transcriptData.transcript;
-          return current ? `${current}\nFollow-up: ${segment}` : segment;
-        });
+        setBuyerTranscript((current) =>
+          appendUniqueTranscript(current, transcriptData.transcript),
+        );
+        if (englishTranscript) {
+          setBuyerEnglishTranscript((current) =>
+            appendUniqueTranscript(current, englishTranscript),
+          );
+        }
         await understandBuyer(
           transcriptData.normalized_transcript || transcriptData.transcript,
         );
       } else {
-        setSupplierTranscript((current) => {
-          const segment = transcriptData.normalized_transcript && transcriptData.normalized_transcript !== transcriptData.transcript
-            ? `${transcriptData.transcript}\n> Translation: ${transcriptData.normalized_transcript}`
-            : transcriptData.transcript;
-          return current ? `${current}\nFollow-up: ${segment}` : segment;
-        });
+        setSupplierTranscript((current) =>
+          appendUniqueTranscript(current, transcriptData.transcript),
+        );
+        if (englishTranscript) {
+          setSupplierEnglishTranscript((current) =>
+            appendUniqueTranscript(current, englishTranscript),
+          );
+        }
         await understandSupplier(transcriptData.normalized_transcript || transcriptData.transcript);
       }
     } catch (caught) {
@@ -557,6 +663,38 @@ export function KaroboliApp() {
       });
   }
 
+  async function appendEnglishTranslation(
+    transcript: string,
+    target: RecordingTarget,
+  ) {
+    try {
+      const response = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: transcript }),
+      });
+      if (!response.ok) return;
+      const data = (await response.json()) as { translation?: string };
+      if (
+        !data.translation ||
+        normalizeTranscript(data.translation) === normalizeTranscript(transcript)
+      ) {
+        return;
+      }
+      if (target === "buyer") {
+        setBuyerEnglishTranscript((current) =>
+          appendUniqueTranscript(current, data.translation || ""),
+        );
+      } else {
+        setSupplierEnglishTranscript((current) =>
+          appendUniqueTranscript(current, data.translation || ""),
+        );
+      }
+    } catch {
+      // The original transcript remains usable when translation is unavailable.
+    }
+  }
+
   async function stopLiveAgent() {
     const session = liveSessionRef.current;
     liveSessionRef.current = null;
@@ -575,7 +713,7 @@ export function KaroboliApp() {
     const session = new SamvaadBrowserSession(
       {
         role,
-        language,
+        language: role === "buyer" ? language : sellerBriefLanguage,
         requirement: requirementRef.current,
         supplierName: role === "supplier" ? selectedSupplier : undefined,
         supplierSupportedLanguages: role === "supplier" && activeSupplier ? activeSupplier.languages.join(", ") : undefined,
@@ -600,13 +738,15 @@ export function KaroboliApp() {
           if (!speaker.toLowerCase().includes("user") || !content.trim()) return;
           if (role === "buyer") {
             setBuyerTranscript((current) =>
-              current ? `${current}\n${content}` : content,
+              appendUniqueTranscript(current, content),
             );
+            void appendEnglishTranslation(content, "buyer");
             queueBuyerUnderstanding(content);
           } else {
             setSupplierTranscript((current) =>
-              current ? `${current}\n${content}` : content,
+              appendUniqueTranscript(current, content),
             );
+            void appendEnglishTranslation(content, "supplier");
             queueSupplierUnderstanding(content);
           }
         },
@@ -659,7 +799,9 @@ export function KaroboliApp() {
     setFallbackUsed(true);
     setError("");
     setBuyerTranscript(fallbackBuyerTranscript);
+    setBuyerEnglishTranscript(fallbackBuyerEnglishTranscript);
     setSupplierTranscript(fallbackSupplierTranscript);
+    setSupplierEnglishTranscript(fallbackSupplierEnglishTranscript);
     requirementRef.current = fallbackRequirement;
     offerRef.current = fallbackOffer;
     setRequirement(fallbackRequirement);
@@ -699,27 +841,62 @@ export function KaroboliApp() {
     );
   }
 
+  function stopAgentBrief() {
+    briefAbortRef.current?.abort();
+    briefAbortRef.current = null;
+    const audio = briefAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      briefAudioRef.current = null;
+    }
+    if (briefAudioUrlRef.current) {
+      URL.revokeObjectURL(briefAudioUrlRef.current);
+      briefAudioUrlRef.current = null;
+    }
+    setBriefPlayback("idle");
+  }
+
   async function playAgentBrief() {
-    if (!requirement) return;
-    setBusy("voice");
+    if (!requirement || briefPlayback !== "idle") {
+      stopAgentBrief();
+      return;
+    }
+    const controller = new AbortController();
+    briefAbortRef.current = controller;
+    setBriefPlayback("loading");
     setError("");
     try {
-      const text = `Namaste. Requirement hai ${requirement.quantity} ${requirement.unit}, ${requirement.product}, ${requirement.specification}. Delivery ${requirement.deliveryLocation} mein ${formatDate(requirement.requiredBy)} tak chahiye. Maximum budget ${money(requirement.maximumBudget)} hai. Apna best all-inclusive offer batayiye.`;
+      const text = `Hello. This is Karoboli, an AI procurement assistant. The buyer needs ${requirement.quantity} ${requirement.unit} of ${requirement.product}, ${requirement.specification}, delivered to ${requirement.deliveryLocation} by ${formatDate(requirement.requiredBy)}. Please share your best all-inclusive offer, including tax, freight, unloading, delivery date, and payment terms.`;
       const response = await fetch("/api/speech/synthesize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, language: "hi-IN", telephony: false }),
+        body: JSON.stringify({
+          text,
+          language: sellerBriefLanguage,
+          translateFromEnglish: true,
+          telephony: false,
+        }),
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error(await readError(response));
       const blob = await response.blob();
+      if (controller.signal.aborted) return;
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
-      audio.onended = () => URL.revokeObjectURL(url);
+      briefAudioRef.current = audio;
+      briefAudioUrlRef.current = url;
+      audio.onended = stopAgentBrief;
+      audio.onerror = () => {
+        stopAgentBrief();
+        setError("Speech playback failed.");
+      };
+      setBriefPlayback("playing");
       await audio.play();
     } catch (caught) {
+      if (caught instanceof DOMException && caught.name === "AbortError") return;
+      stopAgentBrief();
       setError(caught instanceof Error ? caught.message : "Speech playback failed.");
-    } finally {
-      setBusy(null);
     }
   }
 
@@ -737,7 +914,10 @@ export function KaroboliApp() {
     void stopLiveAgent();
     setStage("brief");
     setBuyerTranscript("");
+    setBuyerEnglishTranscript("");
     setSupplierTranscript("");
+    setSupplierEnglishTranscript("");
+    setSellerBriefLanguage("en-IN");
     setRequirement(null);
     setOffer(null);
     setDecision(null);
@@ -1058,10 +1238,11 @@ export function KaroboliApp() {
               )}
 
               {buyerTranscript && (
-                <div className="transcript-block">
-                  <span>ORIGINAL TRANSCRIPT</span>
-                  <blockquote>“{buyerTranscript}”</blockquote>
-                </div>
+                <TranscriptPair
+                  original={buyerTranscript}
+                  english={buyerEnglishTranscript}
+                  originalLabel="ORIGINAL LANGUAGE"
+                />
               )}
 
               {requirement && (
@@ -1147,17 +1328,48 @@ export function KaroboliApp() {
                   <span className="section-kicker">STEP 2 · SUPPLIER</span>
                   <h2>Negotiate the offer.</h2>
                   <p>
-                    Play Karoboli&apos;s brief, then answer as the supplier in
-                    natural Hindi or Hinglish. Self-correct the price once.
+                    Choose the seller&apos;s preferred language, hear the buyer
+                    requirement, then answer naturally and self-correct the
+                    price once.
                   </p>
                 </div>
-                <button
-                  className="voice-button"
-                  onClick={playAgentBrief}
-                  disabled={busy !== null}
-                >
-                  {busy === "voice" ? "Generating…" : "▶ Hear agent brief"}
-                </button>
+                <div className="brief-controls">
+                  <label>
+                    <span>SELLER BRIEF LANGUAGE</span>
+                    <select
+                      value={sellerBriefLanguage}
+                      onChange={(event) => {
+                        stopAgentBrief();
+                        setSellerBriefLanguage(
+                          event.target.value as SpeechLanguage,
+                        );
+                      }}
+                      aria-label="Seller brief language"
+                    >
+                      {(Object.keys(speechLanguageLabels) as SpeechLanguage[]).map(
+                        (code) => (
+                          <option key={code} value={code}>
+                            {speechLanguageLabels[code]}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </label>
+                  <button
+                    className={`voice-button ${
+                      briefPlayback !== "idle" ? "playing" : ""
+                    }`}
+                    onClick={() => void playAgentBrief()}
+                    disabled={busy !== null}
+                    aria-pressed={briefPlayback !== "idle"}
+                  >
+                    {briefPlayback === "loading"
+                      ? "■ Cancel brief"
+                      : briefPlayback === "playing"
+                        ? "■ Stop agent brief"
+                        : "▶ Hear agent brief"}
+                  </button>
+                </div>
               </header>
 
               <div className="supplier-list">
@@ -1252,10 +1464,11 @@ export function KaroboliApp() {
               )}
 
               {supplierTranscript && (
-                <div className="transcript-block">
-                  <span>VERBATIM OFFER</span>
-                  <blockquote>“{supplierTranscript}”</blockquote>
-                </div>
+                <TranscriptPair
+                  original={supplierTranscript}
+                  english={supplierEnglishTranscript}
+                  originalLabel="ORIGINAL-LANGUAGE OFFER"
+                />
               )}
 
               {offer && (

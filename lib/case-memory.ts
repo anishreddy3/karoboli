@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   buyerRequirementSchema,
+  speechLanguageSchema,
   supplierOfferSchema,
   type BuyerRequirement,
   type Decision,
@@ -19,7 +20,10 @@ export const caseMemorySchema = z.object({
   language: z.enum(["unknown", "te-IN", "ta-IN", "hi-IN", "en-IN"]),
   selectedSupplier: z.string().min(1).max(160),
   buyerTranscript: z.string().max(20_000),
+  buyerEnglishTranscript: z.string().max(20_000).default(""),
   supplierTranscript: z.string().max(20_000),
+  supplierEnglishTranscript: z.string().max(20_000).default(""),
+  sellerBriefLanguage: speechLanguageSchema.default("en-IN"),
   requirement: buyerRequirementSchema.nullable(),
   offer: supplierOfferSchema.nullable(),
   decision: z
@@ -87,6 +91,7 @@ export function supplierVisibleCaseMemory(
   return {
     ...memory,
     buyerTranscript: "",
+    buyerEnglishTranscript: "",
     requirement,
     decision,
     evidence: null,

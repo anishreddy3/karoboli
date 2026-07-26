@@ -11,6 +11,7 @@ type D1RunResult = {
 type D1PreparedStatement = {
   bind(...values: unknown[]): D1PreparedStatement;
   first<T>(): Promise<T | null>;
+  all<T>(): Promise<{ results: T[] }>;
   run(): Promise<D1RunResult>;
 };
 
@@ -26,7 +27,10 @@ type CaseRow = {
   language: string;
   selected_supplier: string;
   buyer_transcript: string;
+  buyer_english_transcript: string;
   supplier_transcript: string;
+  supplier_english_transcript: string;
+  seller_brief_language: string;
   requirement_json: string | null;
   offer_json: string | null;
   decision_json: string | null;
@@ -46,7 +50,10 @@ const createTableSql = `
     language TEXT DEFAULT 'unknown' NOT NULL,
     selected_supplier TEXT NOT NULL,
     buyer_transcript TEXT DEFAULT '' NOT NULL,
+    buyer_english_transcript TEXT DEFAULT '' NOT NULL,
     supplier_transcript TEXT DEFAULT '' NOT NULL,
+    supplier_english_transcript TEXT DEFAULT '' NOT NULL,
+    seller_brief_language TEXT DEFAULT 'en-IN' NOT NULL,
     requirement_json TEXT,
     offer_json TEXT,
     decision_json TEXT,
@@ -76,6 +83,27 @@ async function readyDatabase() {
     db.prepare(createTableSql),
     db.prepare(createOwnerIndexSql),
   ]);
+  const columns = await db
+    .prepare("PRAGMA table_info(procurement_cases)")
+    .all<{ name: string }>();
+  const columnNames = new Set(columns.results.map((column) => column.name));
+  const additions = [
+    {
+      name: "buyer_english_transcript",
+      sql: "ALTER TABLE procurement_cases ADD COLUMN buyer_english_transcript TEXT DEFAULT '' NOT NULL",
+    },
+    {
+      name: "supplier_english_transcript",
+      sql: "ALTER TABLE procurement_cases ADD COLUMN supplier_english_transcript TEXT DEFAULT '' NOT NULL",
+    },
+    {
+      name: "seller_brief_language",
+      sql: "ALTER TABLE procurement_cases ADD COLUMN seller_brief_language TEXT DEFAULT 'en-IN' NOT NULL",
+    },
+  ]
+    .filter((column) => !columnNames.has(column.name))
+    .map((column) => db.prepare(column.sql));
+  if (additions.length) await db.batch(additions);
   return db;
 }
 
@@ -99,7 +127,10 @@ function rowToMemory(row: CaseRow): StoredCaseMemory | null {
     language: row.language,
     selectedSupplier: row.selected_supplier,
     buyerTranscript: row.buyer_transcript,
+    buyerEnglishTranscript: row.buyer_english_transcript,
     supplierTranscript: row.supplier_transcript,
+    supplierEnglishTranscript: row.supplier_english_transcript,
+    sellerBriefLanguage: row.seller_brief_language,
     requirement: parseJson(row.requirement_json),
     offer: parseJson(row.offer_json),
     decision: parseJson(row.decision_json),
@@ -139,17 +170,21 @@ export async function saveCaseMemory(
     .prepare(
       `INSERT INTO procurement_cases (
         id, owner_id, schema_version, stage, language, selected_supplier,
-        buyer_transcript, supplier_transcript, requirement_json, offer_json,
-        decision_json, purchase_order_json, evidence_json, fallback_used,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        buyer_transcript, buyer_english_transcript, supplier_transcript,
+        supplier_english_transcript, seller_brief_language, requirement_json,
+        offer_json, decision_json, purchase_order_json, evidence_json,
+        fallback_used, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         schema_version = excluded.schema_version,
         stage = excluded.stage,
         language = excluded.language,
         selected_supplier = excluded.selected_supplier,
         buyer_transcript = excluded.buyer_transcript,
+        buyer_english_transcript = excluded.buyer_english_transcript,
         supplier_transcript = excluded.supplier_transcript,
+        supplier_english_transcript = excluded.supplier_english_transcript,
+        seller_brief_language = excluded.seller_brief_language,
         requirement_json = excluded.requirement_json,
         offer_json = excluded.offer_json,
         decision_json = excluded.decision_json,
@@ -167,7 +202,10 @@ export async function saveCaseMemory(
       memory.language,
       memory.selectedSupplier,
       memory.buyerTranscript,
+      memory.buyerEnglishTranscript,
       memory.supplierTranscript,
+      memory.supplierEnglishTranscript,
+      memory.sellerBriefLanguage,
       json(memory.requirement),
       json(memory.offer),
       json(memory.decision),

@@ -392,6 +392,39 @@ button {
   font-weight: 650;
 }
 
+.brief-controls {
+  display: grid;
+  min-width: 190px;
+  gap: 8px;
+}
+
+.brief-controls label {
+  display: grid;
+  gap: 5px;
+}
+
+.brief-controls label > span {
+  color: var(--muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+}
+
+.brief-controls select {
+  width: 100%;
+}
+
+.brief-controls .voice-button {
+  width: 100%;
+}
+
+.voice-button.playing {
+  border-color: #e1a18c;
+  background: #fff2ed;
+  color: var(--red);
+}
+
 .voice-pad {
   display: flex;
   min-height: 168px;
@@ -487,11 +520,26 @@ button {
   font-size: 10px;
 }
 
-.transcript-block {
+.transcript-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   margin-top: 18px;
+}
+
+.transcript-pair.single {
+  grid-template-columns: 1fr;
+}
+
+.transcript-block {
   padding: 18px 20px;
   border-left: 3px solid var(--orange);
   background: #faf7f0;
+}
+
+.transcript-block.translation {
+  border-left-color: var(--green);
+  background: #f1faf5;
 }
 
 .transcript-block > span {
@@ -554,6 +602,19 @@ button {
   font-family: Georgia, serif;
   font-size: 15px;
   font-weight: 500;
+}
+
+.highlight-action {
+  animation: pulse-border 1.5s infinite;
+  border-color: #f59e0b !important;
+  background-color: #fffbeb !important;
+  color: #b45309 !important;
+}
+
+@keyframes pulse-border {
+  0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  70% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
 }
 
 .follow-up-card small {
@@ -1671,6 +1732,14 @@ button {
   .stage-heading,
   .decision-heading {
     flex-direction: column;
+  }
+
+  .brief-controls {
+    width: 100%;
+  }
+
+  .transcript-pair {
+    grid-template-columns: 1fr;
   }
 
   .facts-grid {

@@ -3,6 +3,21 @@ import { z } from "zod";
 export const languageSchema = z.enum(["te-IN", "ta-IN", "hi-IN", "en-IN"]);
 export type Language = z.infer<typeof languageSchema>;
 
+export const speechLanguageSchema = z.enum([
+  "bn-IN",
+  "en-IN",
+  "gu-IN",
+  "hi-IN",
+  "kn-IN",
+  "ml-IN",
+  "mr-IN",
+  "od-IN",
+  "pa-IN",
+  "ta-IN",
+  "te-IN",
+]);
+export type SpeechLanguage = z.infer<typeof speechLanguageSchema>;
+
 export const paymentTermSchema = z.enum([
   "advance",
   "delivery",

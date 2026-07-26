@@ -65,7 +65,7 @@ export async function POST(request: Request) {
 
     if (!data.transcript) throw new Error("Sarvam returned an empty transcript.");
 
-    let normalizedTranscript = data.transcript;
+    let englishTranscript = "";
     try {
       const translatedResponse = await sarvamFetch("/speech-to-text", {
         method: "POST",
@@ -74,7 +74,13 @@ export async function POST(request: Request) {
       const translated = (await translatedResponse.json()) as {
         transcript?: string;
       };
-      if (translated.transcript) normalizedTranscript = translated.transcript;
+      if (
+        translated.transcript &&
+        translated.transcript.trim().toLocaleLowerCase() !==
+          data.transcript.trim().toLocaleLowerCase()
+      ) {
+        englishTranscript = translated.transcript.trim();
+      }
     } catch (error) {
       console.warn(
         "Translation channel unavailable; using original transcript:",
@@ -84,7 +90,8 @@ export async function POST(request: Request) {
 
     return Response.json({
       ...data,
-      normalized_transcript: normalizedTranscript,
+      english_transcript: englishTranscript,
+      normalized_transcript: englishTranscript || data.transcript,
     });
   } catch (error) {
     return providerErrorResponse(error);

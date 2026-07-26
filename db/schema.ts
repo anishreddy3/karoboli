@@ -11,7 +11,14 @@ export const procurementCases = sqliteTable(
     language: text("language").notNull().default("unknown"),
     selectedSupplier: text("selected_supplier").notNull(),
     buyerTranscript: text("buyer_transcript").notNull().default(""),
+    buyerEnglishTranscript: text("buyer_english_transcript").notNull().default(""),
     supplierTranscript: text("supplier_transcript").notNull().default(""),
+    supplierEnglishTranscript: text("supplier_english_transcript")
+      .notNull()
+      .default(""),
+    sellerBriefLanguage: text("seller_brief_language")
+      .notNull()
+      .default("en-IN"),
     requirementJson: text("requirement_json"),
     offerJson: text("offer_json"),
     decisionJson: text("decision_json"),
