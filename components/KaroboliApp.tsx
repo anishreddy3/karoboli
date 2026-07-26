@@ -81,6 +81,71 @@ async function readError(response: Response) {
   return data?.error || `Request failed (${response.status})`;
 }
 
+async function browserAudioToWav(blob: Blob): Promise<Blob> {
+  const audioContext = new AudioContext();
+  try {
+    const decoded = await audioContext.decodeAudioData(await blob.arrayBuffer());
+    const targetSampleRate = 16_000;
+    const sampleCount = Math.max(
+      1,
+      Math.floor(decoded.duration * targetSampleRate),
+    );
+    const pcm = new Float32Array(sampleCount);
+    const channels = Array.from({ length: decoded.numberOfChannels }, (_, index) =>
+      decoded.getChannelData(index),
+    );
+
+    for (let index = 0; index < sampleCount; index += 1) {
+      const sourcePosition = (index * decoded.sampleRate) / targetSampleRate;
+      const lower = Math.min(Math.floor(sourcePosition), decoded.length - 1);
+      const upper = Math.min(lower + 1, decoded.length - 1);
+      const fraction = sourcePosition - lower;
+      let mixed = 0;
+      for (const channel of channels) {
+        mixed += channel[lower] + (channel[upper] - channel[lower]) * fraction;
+      }
+      pcm[index] = mixed / channels.length;
+    }
+
+    const wav = new ArrayBuffer(44 + pcm.length * 2);
+    const view = new DataView(wav);
+    const writeText = (offset: number, value: string) => {
+      for (let index = 0; index < value.length; index += 1) {
+        view.setUint8(offset + index, value.charCodeAt(index));
+      }
+    };
+
+    writeText(0, "RIFF");
+    view.setUint32(4, 36 + pcm.length * 2, true);
+    writeText(8, "WAVE");
+    writeText(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, targetSampleRate, true);
+    view.setUint32(28, targetSampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeText(36, "data");
+    view.setUint32(40, pcm.length * 2, true);
+
+    let offset = 44;
+    for (const sample of pcm) {
+      const clamped = Math.max(-1, Math.min(1, sample));
+      view.setInt16(
+        offset,
+        clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff,
+        true,
+      );
+      offset += 2;
+    }
+
+    return new Blob([wav], { type: "audio/wav" });
+  } finally {
+    await audioContext.close();
+  }
+}
+
 export function KaroboliApp() {
   const [stage, setStage] = useState<Stage>("brief");
   const [capability, setCapability] = useState<CapabilityStatus>("checking");
@@ -130,10 +195,18 @@ export function KaroboliApp() {
       };
       recorder.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop());
-        const audio = new Blob(chunksRef.current, {
-          type: recorder.mimeType || "audio/webm",
-        });
-        await transcribeAndUnderstand(audio, targetRef.current);
+        try {
+          const recordedAudio = new Blob(chunksRef.current, {
+            type: recorder.mimeType || "audio/webm",
+          });
+          const wavAudio = await browserAudioToWav(recordedAudio);
+          await transcribeAndUnderstand(wavAudio, targetRef.current);
+        } catch {
+          setBusy(null);
+          setError(
+            "The browser could not prepare this recording. Reload and try again.",
+          );
+        }
       };
       recorder.start();
       setRecording(target);
@@ -155,8 +228,7 @@ export function KaroboliApp() {
     setError("");
     try {
       const form = new FormData();
-      const extension = audio.type.includes("mp4") ? "m4a" : "webm";
-      form.set("audio", audio, `karoboli-${target}.${extension}`);
+      form.set("audio", audio, `karoboli-${target}.wav`);
       form.set("mode", "codemix");
       form.set("language", target === "buyer" ? language : "unknown");
       const transcriptResponse = await fetch("/api/speech/transcribe", {
