@@ -7,6 +7,7 @@ WebSocket client to the documented `AsyncSamvaadAgent` runtime.
 
 ```dotenv
 SARVAM_API_KEY=
+SARVAM_AGENT_API_KEY=
 SARVAM_AGENT_ORG_ID=
 SARVAM_AGENT_WORKSPACE_ID=
 SARVAM_AGENT_APP_ID=
@@ -18,6 +19,10 @@ SAMVAAD_ALLOWED_ORIGINS=http://localhost:3000
 KAROBOLI_TOOL_BASE_URL=http://localhost:3000
 AGENT_TOOL_SHARED_SECRET=
 ```
+
+`SARVAM_AGENT_API_KEY` is used only by the Samvaad runtime. If it is omitted,
+the gateway falls back to `SARVAM_API_KEY` for accounts where one key is
+authorized for both the public speech APIs and Agents.
 
 The same `SAMVAAD_GATEWAY_SHARED_SECRET` must be configured in the Karoboli web
 app so it can mint short-lived browser session tokens. The same

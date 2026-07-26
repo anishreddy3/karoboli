@@ -26,6 +26,7 @@ Provide these values to activate live streaming:
 
 ```dotenv
 SARVAM_API_KEY=
+SARVAM_AGENT_API_KEY=
 SARVAM_AGENT_ORG_ID=
 SARVAM_AGENT_WORKSPACE_ID=
 SARVAM_AGENT_APP_ID=

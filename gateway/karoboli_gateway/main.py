@@ -80,19 +80,22 @@ async def agent_socket(websocket: WebSocket) -> None:
         await websocket.close(code=4403, reason="Origin is not allowed.")
         return
 
-    try:
-        claims = verify_session_token(
-            websocket.query_params.get("token", ""),
-            settings.gateway_shared_secret,
-        )
-    except SessionTokenError:
-        await websocket.close(code=4401, reason="Invalid session token.")
-        return
-
     await websocket.accept()
     agent: AsyncSamvaadAgent | None = None
     try:
         init = await websocket.receive_json()
+        try:
+            claims = verify_session_token(
+                str(init.get("token", "")),
+                settings.gateway_shared_secret,
+            )
+        except SessionTokenError:
+            await websocket.send_json(
+                {"type": "error", "message": "Invalid session token."}
+            )
+            await websocket.close(code=4401, reason="Invalid session token.")
+            return
+
         if init.get("type") != "init" or init.get("role") not in {
             "buyer",
             "supplier",
@@ -134,8 +137,15 @@ async def agent_socket(websocket: WebSocket) -> None:
             speech_hotwords=_hotwords(requirement),
         )
 
+        async def send_to_client(payload: dict[str, Any]) -> bool:
+            try:
+                await websocket.send_json(payload)
+                return True
+            except (WebSocketDisconnect, RuntimeError):
+                return False
+
         async def on_text(message: Any) -> None:
-            await websocket.send_json(
+            await send_to_client(
                 {
                     "type": "agent_text",
                     "text": getattr(message, "text", ""),
@@ -144,7 +154,7 @@ async def agent_socket(websocket: WebSocket) -> None:
             )
 
         async def on_audio(message: Any) -> None:
-            await websocket.send_json(
+            await send_to_client(
                 {
                     "type": "agent_audio",
                     "audio": getattr(message, "audio_base64", ""),
@@ -154,7 +164,7 @@ async def agent_socket(websocket: WebSocket) -> None:
 
         async def on_event(message: Any) -> None:
             payload = _message_payload(message)
-            await websocket.send_json(
+            await send_to_client(
                 {
                     "type": "agent_event",
                     "event": payload.get("type", "unknown"),
@@ -164,7 +174,7 @@ async def agent_socket(websocket: WebSocket) -> None:
 
         async def on_transcript(message: Any) -> None:
             role_value = getattr(getattr(message, "role", None), "value", "")
-            await websocket.send_json(
+            await send_to_client(
                 {
                     "type": "transcript",
                     "role": role_value,
@@ -183,7 +193,7 @@ async def agent_socket(websocket: WebSocket) -> None:
         )
         await agent.start()
         await agent.wait_for_connect(timeout=10)
-        await websocket.send_json(
+        await send_to_client(
             {
                 "type": "ready",
                 "interactionId": agent.get_interaction_id(),

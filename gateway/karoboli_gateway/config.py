@@ -21,8 +21,12 @@ class Settings:
 
     @classmethod
     def from_environment(cls) -> "Settings":
+        agent_api_key = (
+            os.getenv("SARVAM_AGENT_API_KEY", "").strip()
+            or os.getenv("SARVAM_API_KEY", "").strip()
+        )
         required = {
-            "SARVAM_API_KEY": os.getenv("SARVAM_API_KEY", "").strip(),
+            "SARVAM_AGENT_API_KEY": agent_api_key,
             "SARVAM_AGENT_ORG_ID": os.getenv("SARVAM_AGENT_ORG_ID", "").strip(),
             "SARVAM_AGENT_WORKSPACE_ID": os.getenv(
                 "SARVAM_AGENT_WORKSPACE_ID", ""
@@ -47,7 +51,7 @@ class Settings:
             if origin.strip()
         )
         return cls(
-            sarvam_api_key=required["SARVAM_API_KEY"],
+            sarvam_api_key=required["SARVAM_AGENT_API_KEY"],
             org_id=required["SARVAM_AGENT_ORG_ID"],
             workspace_id=required["SARVAM_AGENT_WORKSPACE_ID"],
             app_id=required["SARVAM_AGENT_APP_ID"],

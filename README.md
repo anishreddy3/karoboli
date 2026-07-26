@@ -49,6 +49,8 @@ the terminal will show the next available port.
 The streaming path requires a committed Samvaad app plus organization and
 workspace IDs. Follow [the gateway setup](./gateway/README.md), run it on port
 8788, and add the gateway URL and matching session secret to `.env.local`.
+Use `SARVAM_AGENT_API_KEY` when the Agents runtime key differs from the public
+speech API key.
 Karoboli automatically enables the streaming/composed provider switch when the
 gateway is configured.
 

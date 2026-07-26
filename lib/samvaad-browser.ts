@@ -96,11 +96,9 @@ export class SamvaadBrowserSession {
       gatewayUrl: string;
       token: string;
     };
-    const url = new URL(session.gatewayUrl);
-    url.searchParams.set("token", session.token);
 
     await new Promise<void>((resolve, reject) => {
-      const socket = new WebSocket(url);
+      const socket = new WebSocket(session.gatewayUrl);
       this.socket = socket;
       const timeout = window.setTimeout(
         () => reject(new Error("Samvaad gateway connection timed out.")),
@@ -108,7 +106,13 @@ export class SamvaadBrowserSession {
       );
 
       socket.onopen = () => {
-        socket.send(JSON.stringify({ type: "init", ...this.init }));
+        socket.send(
+          JSON.stringify({
+            type: "init",
+            token: session.token,
+            ...this.init,
+          }),
+        );
       };
       socket.onerror = () => {
         window.clearTimeout(timeout);
