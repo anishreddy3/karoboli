@@ -20,6 +20,9 @@ export const buyerFieldNames = [
 ] as const;
 
 const referenceToday = new Date("2026-07-26T00:00:00Z");
+const referenceYear = referenceToday.getUTCFullYear();
+const earliestTime = referenceToday.getTime();
+const latestTime = new Date("2027-07-26T00:00:00Z").getTime();
 
 function knownString(next: string, previous?: string): string {
   return next.toLowerCase() === "unknown" && previous ? previous : next;
@@ -152,7 +155,7 @@ export function dateFromSpokenMonth(transcript: string): string | null {
   if (numeric) {
     const day = Number(numeric[1]);
     const month = Number(numeric[2]);
-    let year = Number(numeric[3] || referenceToday.getUTCFullYear());
+    let year = Number(numeric[3] || referenceYear);
     let date = validDate(year, month, day);
     if (date && date < referenceToday && !numeric[3]) {
       year += 1;
@@ -173,7 +176,7 @@ export function dateFromSpokenMonth(transcript: string): string | null {
       if (!day) continue;
       const explicitYear = nearby.match(/\b(20\d{2})\b/);
       let year = Number(
-        explicitYear?.[1] || referenceToday.getUTCFullYear(),
+        explicitYear?.[1] || referenceYear,
       );
       let date = validDate(year, month, day);
       if (date && date < referenceToday && !explicitYear) {
@@ -189,13 +192,11 @@ export function dateFromSpokenMonth(transcript: string): string | null {
 
 export function dateIsPlausible(value: string): boolean {
   if (value === "unknown") return false;
-  const date = new Date(`${value}T00:00:00Z`);
-  const earliest = referenceToday.getTime();
-  const latest = new Date("2027-07-26T00:00:00Z").getTime();
+  const time = new Date(`${value}T00:00:00Z`).getTime();
   return (
-    !Number.isNaN(date.getTime()) &&
-    date.getTime() >= earliest &&
-    date.getTime() <= latest
+    !Number.isNaN(time) &&
+    time >= earliestTime &&
+    time <= latestTime
   );
 }
 
