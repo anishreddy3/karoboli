@@ -13,6 +13,9 @@
 
 ## Milestone 2 — Agent depth
 
+Status: implemented on `codex/milestone-2-agent-depth`; live account validation
+awaits the provisioned organization, workspace, and committed Samvaad app ID.
+
 - Add a Python realtime gateway using the documented
   `sarvam-conv-ai-sdk` and `AsyncSamvaadAgent`.
 - Connect the browser to that gateway for streamed PCM audio, text, and events.

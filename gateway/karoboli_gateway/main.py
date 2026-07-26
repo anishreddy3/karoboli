@@ -1,0 +1,225 @@
+from __future__ import annotations
+
+import base64
+import json
+from typing import Any
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from pydantic import SecretStr
+from sarvam_conv_ai_sdk import (
+    AsyncSamvaadAgent,
+    InteractionConfig,
+    InteractionType,
+    SarvamToolLanguageName,
+)
+from sarvam_conv_ai_sdk.messages.types import UserIdentifierType
+
+from .auth import SessionTokenError, verify_session_token
+from .config import Settings
+
+app = FastAPI(title="Karoboli Samvaad Gateway", version="0.2.0")
+
+LANGUAGES = {
+    "as-IN": SarvamToolLanguageName.ASSAMESE,
+    "bn-IN": SarvamToolLanguageName.BENGALI,
+    "en-IN": SarvamToolLanguageName.ENGLISH,
+    "gu-IN": SarvamToolLanguageName.GUJARATI,
+    "hi-IN": SarvamToolLanguageName.HINDI,
+    "kn-IN": SarvamToolLanguageName.KANNADA,
+    "kok-IN": SarvamToolLanguageName.KONKANI,
+    "ml-IN": SarvamToolLanguageName.MALAYALAM,
+    "mr-IN": SarvamToolLanguageName.MARATHI,
+    "or-IN": SarvamToolLanguageName.ODIA,
+    "pa-IN": SarvamToolLanguageName.PUNJABI,
+    "ta-IN": SarvamToolLanguageName.TAMIL,
+    "te-IN": SarvamToolLanguageName.TELUGU,
+}
+
+
+def _message_payload(message: Any) -> dict[str, Any]:
+    if hasattr(message, "model_dump"):
+        return message.model_dump(mode="json")
+    return {"value": str(message)}
+
+
+def _hotwords(requirement: dict[str, Any] | None) -> list[str]:
+    if not requirement:
+        return ["Karoboli"]
+    values = [
+        "Karoboli",
+        requirement.get("product"),
+        requirement.get("specification"),
+        requirement.get("deliveryLocation"),
+    ]
+    return [str(value) for value in values if value and value != "unknown"]
+
+
+@app.get("/health")
+async def health() -> dict[str, Any]:
+    try:
+        settings = Settings.from_environment()
+    except RuntimeError as error:
+        return {"ready": False, "detail": str(error)}
+    return {
+        "ready": True,
+        "appConfigured": bool(settings.app_id),
+        "allowedOrigins": len(settings.allowed_origins),
+    }
+
+
+@app.websocket("/ws/agent")
+async def agent_socket(websocket: WebSocket) -> None:
+    try:
+        settings = Settings.from_environment()
+    except RuntimeError:
+        await websocket.close(code=1013, reason="Gateway is not configured.")
+        return
+
+    origin = websocket.headers.get("origin")
+    if origin and origin not in settings.allowed_origins:
+        await websocket.close(code=4403, reason="Origin is not allowed.")
+        return
+
+    try:
+        claims = verify_session_token(
+            websocket.query_params.get("token", ""),
+            settings.gateway_shared_secret,
+        )
+    except SessionTokenError:
+        await websocket.close(code=4401, reason="Invalid session token.")
+        return
+
+    await websocket.accept()
+    agent: AsyncSamvaadAgent | None = None
+    try:
+        init = await websocket.receive_json()
+        if init.get("type") != "init" or init.get("role") not in {
+            "buyer",
+            "supplier",
+        }:
+            await websocket.send_json(
+                {"type": "error", "message": "A valid init message is required."}
+            )
+            await websocket.close(code=4400)
+            return
+
+        role = str(init["role"])
+        requirement = (
+            init.get("requirement")
+            if isinstance(init.get("requirement"), dict)
+            else None
+        )
+        language = LANGUAGES.get(str(init.get("language", "")))
+        initial_state = (
+            settings.buyer_state if role == "buyer" else settings.supplier_state
+        )
+        agent_variables = {
+            "karoboli_role": role,
+            "buyer_requirement_json": json.dumps(requirement or {}),
+            "supplier_name": str(init.get("supplierName") or ""),
+            "policy_authority": "karoboli_deterministic_engine",
+        }
+        config = InteractionConfig(
+            user_identifier_type=UserIdentifierType.CUSTOM,
+            user_identifier=claims.subject,
+            org_id=settings.org_id,
+            workspace_id=settings.workspace_id,
+            app_id=settings.app_id,
+            version=settings.app_version,
+            interaction_type=InteractionType.CALL,
+            sample_rate=16_000,
+            agent_variables=agent_variables,
+            initial_language_name=language,
+            initial_state_name=initial_state,
+            speech_hotwords=_hotwords(requirement),
+        )
+
+        async def on_text(message: Any) -> None:
+            await websocket.send_json(
+                {
+                    "type": "agent_text",
+                    "text": getattr(message, "text", ""),
+                    "payload": _message_payload(message),
+                }
+            )
+
+        async def on_audio(message: Any) -> None:
+            await websocket.send_json(
+                {
+                    "type": "agent_audio",
+                    "audio": getattr(message, "audio_base64", ""),
+                    "sampleRate": getattr(message, "sample_rate", 16_000),
+                }
+            )
+
+        async def on_event(message: Any) -> None:
+            payload = _message_payload(message)
+            await websocket.send_json(
+                {
+                    "type": "agent_event",
+                    "event": payload.get("type", "unknown"),
+                    "payload": payload,
+                }
+            )
+
+        async def on_transcript(message: Any) -> None:
+            role_value = getattr(getattr(message, "role", None), "value", "")
+            await websocket.send_json(
+                {
+                    "type": "transcript",
+                    "role": role_value,
+                    "content": getattr(message, "content", ""),
+                }
+            )
+
+        agent = AsyncSamvaadAgent(
+            api_key=SecretStr(settings.sarvam_api_key),
+            config=config,
+            text_callback=on_text,
+            audio_callback=on_audio,
+            event_callback=on_event,
+            transcript_callback=on_transcript,
+            base_url=settings.sarvam_runtime_base_url,
+        )
+        await agent.start()
+        await agent.wait_for_connect(timeout=10)
+        await websocket.send_json(
+            {
+                "type": "ready",
+                "interactionId": agent.get_interaction_id(),
+                "sampleRate": 16_000,
+            }
+        )
+
+        while True:
+            message = await websocket.receive_json()
+            message_type = message.get("type")
+            if message_type == "audio":
+                encoded = str(message.get("data", ""))
+                if len(encoded) > 350_000:
+                    raise ValueError("Audio chunk is too large.")
+                await agent.send_audio(base64.b64decode(encoded, validate=True))
+            elif message_type == "text":
+                await agent.send_text(str(message.get("data", ""))[:4000])
+            elif message_type == "stop":
+                break
+            else:
+                await websocket.send_json(
+                    {"type": "warning", "message": "Unsupported client message."}
+                )
+    except WebSocketDisconnect:
+        pass
+    except Exception as error:
+        try:
+            await websocket.send_json(
+                {"type": "error", "message": f"Agent session failed: {error}"}
+            )
+        except Exception:
+            pass
+    finally:
+        if agent is not None:
+            await agent.stop()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
