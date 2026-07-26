@@ -187,15 +187,17 @@ export function dateFromSpokenMonth(transcript: string): string | null {
   return null;
 }
 
+const EARLIEST_PLAUSIBLE_TIME = referenceToday.getTime();
+const LATEST_PLAUSIBLE_TIME = new Date("2027-07-26T00:00:00Z").getTime();
+
 export function dateIsPlausible(value: string): boolean {
   if (value === "unknown") return false;
   const date = new Date(`${value}T00:00:00Z`);
-  const earliest = referenceToday.getTime();
-  const latest = new Date("2027-07-26T00:00:00Z").getTime();
+  const t = date.getTime();
   return (
-    !Number.isNaN(date.getTime()) &&
-    date.getTime() >= earliest &&
-    date.getTime() <= latest
+    !Number.isNaN(t) &&
+    t >= EARLIEST_PLAUSIBLE_TIME &&
+    t <= LATEST_PLAUSIBLE_TIME
   );
 }
 
