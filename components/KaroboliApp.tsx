@@ -26,6 +26,7 @@ import {
   type SamvaadRole,
   type SamvaadStatus,
 } from "@/lib/samvaad-browser";
+import { DealRoom } from "./DealRoom";
 
 type Stage = "brief" | "supplier" | "decision";
 type RecordingTarget = "buyer" | "supplier";
@@ -980,6 +981,14 @@ export function KaroboliApp() {
                 </>
               )}
 
+              <DealRoom
+                requirement={requirement}
+                offer={offer}
+                decision={null}
+                evidence={null}
+                supplierName={selectedSupplier}
+              />
+
               <div className="stage-actions">
                 <button className="secondary-button" onClick={() => setStage("brief")}>
                   ← Back
@@ -1127,6 +1136,14 @@ export function KaroboliApp() {
                   </p>
                 </div>
               )}
+
+              <DealRoom
+                requirement={requirement}
+                offer={offer}
+                decision={decision}
+                evidence={evidence}
+                supplierName={selectedSupplier}
+              />
 
               <div className="stage-actions final-actions">
                 <button className="secondary-button" onClick={reset}>

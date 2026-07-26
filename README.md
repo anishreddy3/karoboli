@@ -79,7 +79,9 @@ goal unless they make the live procurement loop more convincing.
 
 See [IDEA_SCOPE.md](./IDEA_SCOPE.md), [the demo script](./docs/demo-script.md),
 [the Milestone 2 implementation notes](./docs/milestone-2.md), and
-[the implementation roadmap](./docs/roadmap.md).
+[the implementation roadmap](./docs/roadmap.md). Product access boundaries,
+pricing and the bottom-up market model live in
+[deal rooms, pricing and monetization](./docs/deal-room-and-monetization.md).
 
 ## Safety and prototype status
 

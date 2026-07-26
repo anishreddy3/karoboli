@@ -13,12 +13,36 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    "https://karoboli-epoch.posimreddy-anishkuma.chatgpt.site",
+  ),
   title: "Karoboli — Voice-native procurement for India",
   description:
     "A multilingual voice procurement agent built for the Sarvam Epoch Buildathon.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
+  },
+  openGraph: {
+    title: "A buyer speaks. Karoboli closes the loop.",
+    description:
+      "Voice-native procurement for India—from multilingual negotiation to a governed purchase outcome.",
+    type: "website",
+    url: "/",
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "Karoboli turns multilingual voice negotiation into a protected deal room and purchase order.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "A buyer speaks. Karoboli closes the loop.",
+    description: "Voice-native procurement for India.",
+    images: ["/og.png"],
   },
 };
 
