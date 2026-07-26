@@ -1,4 +1,5 @@
 import { getCall, upsertCall } from "@/db/telephony";
+import type { Decision, PurchaseOrder } from "@/lib/domain";
 
 export const runtime = "edge";
 
@@ -60,8 +61,8 @@ export async function POST(request: Request) {
     consentState: existing?.consentState ?? ("pending" as const),
     status,
     transcriptSummary: String(body.transcript_summary ?? existing?.transcriptSummary ?? ""),
-    decision: (body.decision as typeof existing.decision) ?? existing?.decision ?? null,
-    purchaseOrder: (body.purchase_order as typeof existing.purchaseOrder) ?? existing?.purchaseOrder ?? null,
+    decision: (body.decision as Decision | null | undefined) ?? existing?.decision ?? null,
+    purchaseOrder: (body.purchase_order as PurchaseOrder | null | undefined) ?? existing?.purchaseOrder ?? null,
     commitments: Array.isArray(body.commitments)
       ? (body.commitments as string[])
       : (existing?.commitments ?? []),

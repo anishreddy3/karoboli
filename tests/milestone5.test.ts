@@ -1,16 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { upsertTenant, getTenant } from "../db/tenants.ts";
-import { enqueue, resolve, listPending } from "../db/approval-queue.ts";
-import { upsertSupplier, getSupplier, updateConsent } from "../db/suppliers.ts";
-import { upsertCampaign, getCampaign, upsertAttempt } from "../db/campaigns.ts";
-import { appendEvent, queryEvents, _clearEvents } from "../db/audit.ts";
-import { redactEvent, formatNdjson } from "../lib/audit.ts";
-import { computeAnalytics } from "../lib/campaign.ts";
-import { fallbackRequirement } from "../lib/fixtures.ts";
-import type { TenantPolicy } from "../lib/tenant.ts";
-import type { CampaignAttempt } from "../lib/campaign.ts";
+import { upsertTenant, getTenant } from "../db/tenants";
+import { enqueue, resolve, listPending } from "../db/approval-queue";
+import { upsertSupplier, getSupplier, updateConsent } from "../db/suppliers";
+import { upsertCampaign, getCampaign, upsertAttempt } from "../db/campaigns";
+import { appendEvent, queryEvents, _clearEvents } from "../db/audit";
+import { redactEvent, formatNdjson } from "../lib/audit";
+import { computeAnalytics } from "../lib/campaign";
+import { fallbackRequirement } from "../lib/fixtures";
+import type { TenantPolicy } from "../lib/tenant";
+import type { CampaignAttempt } from "../lib/campaign";
 
 test("tenant default provisioning and policy override", () => {
   const tenant = getTenant("t-001");
@@ -64,6 +64,8 @@ test("supplier consent updates", () => {
     phone: "91-9999999999",
     area: "Mumbai",
     languages: ["en"],
+    materials: ["cement"],
+    deliveryRadius: "20 km",
     completedOrders: 0,
     score: 50,
     consentState: "pending",

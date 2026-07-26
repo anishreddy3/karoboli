@@ -5,6 +5,8 @@ import {
   caseMemorySchema,
   isBuyerRequirementReady,
   safeStageForMemory,
+  supplierVisibleCaseMemory,
+  type StoredCaseMemory,
 } from "../lib/case-memory";
 import { fallbackOffer, fallbackRequirement } from "../lib/fixtures";
 
@@ -65,4 +67,38 @@ test("restored stage cannot skip required workflow state", () => {
     }),
     "brief",
   );
+});
+
+test("supplier case projection removes buyer-private memory before transport", () => {
+  const stored: StoredCaseMemory = {
+    id: "11111111-1111-4111-8111-111111111111",
+    createdAt: "2026-07-26T00:00:00.000Z",
+    updatedAt: "2026-07-26T00:00:00.000Z",
+    ...completeMemory,
+    stage: "decision",
+    buyerTranscript: "Private buyer ceiling is ₹41,000",
+    offer: fallbackOffer,
+    decision: {
+      action: "human-approval",
+      reasons: ["Private budget threshold"],
+      checks: [
+        {
+          label: "Private ceiling",
+          passed: false,
+          detail: "₹40,200 exceeds autonomous ceiling",
+        },
+      ],
+    },
+  };
+
+  const visible = supplierVisibleCaseMemory(stored);
+  const serialized = JSON.stringify(visible);
+  assert.equal(visible.requirement?.maximumBudget, 0);
+  assert.deepEqual(visible.requirement?.constraints, []);
+  assert.equal(visible.buyerTranscript, "");
+  assert.equal(visible.evidence, null);
+  assert.deepEqual(visible.decision?.reasons, []);
+  assert.deepEqual(visible.decision?.checks, []);
+  assert.doesNotMatch(serialized, /41,000|41000|Private budget threshold/);
+  assert.equal(caseMemorySchema.safeParse(visible).success, true);
 });

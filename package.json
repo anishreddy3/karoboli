@@ -17,8 +17,9 @@
     "test:memory": "tsx --test tests/case-memory.test.ts",
     "test:understand": "tsx --test tests/understand-request.test.ts",
     "test:gateway": "PYTHONPATH=gateway python3 -m unittest discover -s gateway/tests -v",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "check": "npm run lint && npm test"
+    "check": "npm run lint && npm run typecheck && npm test"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

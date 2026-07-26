@@ -121,6 +121,7 @@ async def agent_socket(websocket: WebSocket) -> None:
             "karoboli_role": role,
             "buyer_requirement_json": json.dumps(requirement or {}),
             "supplier_name": str(init.get("supplierName") or ""),
+            "supplier_supported_languages": str(init.get("supplierSupportedLanguages") or "Any Indian language"),
             "policy_authority": "karoboli_deterministic_engine",
         }
         config = InteractionConfig(

@@ -7,6 +7,8 @@ export type SupplierRecord = {
   phone: string;
   area: string;
   languages: string[];
+  materials: string[];
+  deliveryRadius: string;
   completedOrders: number;
   score: number;           // 0–100
   consentState: ConsentState;

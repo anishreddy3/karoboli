@@ -13,6 +13,7 @@ export type SamvaadInit = {
   language: string;
   requirement?: BuyerRequirement | null;
   supplierName?: string;
+  supplierSupportedLanguages?: string;
 };
 
 type Callbacks = {

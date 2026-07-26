@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   buyerRequirementSchema,
   supplierOfferSchema,
+  type BuyerRequirement,
   type Decision,
   type EvidenceRecord,
   type PurchaseOrder,
@@ -49,7 +50,7 @@ export type StoredCaseMemory = CaseMemory & {
 
 export function isBuyerRequirementReady(
   requirement: CaseMemory["requirement"],
-): boolean {
+): requirement is BuyerRequirement {
   return Boolean(
     requirement &&
       !requirement.needsConfirmation &&
@@ -62,6 +63,34 @@ export function isBuyerRequirementReady(
       requirement.maximumBudget > 0 &&
       requirement.preferredPaymentTerm !== "unknown",
   );
+}
+
+export function supplierVisibleCaseMemory(
+  memory: StoredCaseMemory,
+): StoredCaseMemory {
+  const requirement = memory.requirement
+    ? {
+        ...memory.requirement,
+        maximumBudget: 0,
+        constraints: [],
+        normalizedSummary: `${memory.requirement.quantity} ${memory.requirement.unit} of ${memory.requirement.product}, ${memory.requirement.specification}, delivered to ${memory.requirement.deliveryLocation} by ${memory.requirement.requiredBy}.`,
+      }
+    : null;
+  const decision = memory.decision
+    ? {
+        ...memory.decision,
+        reasons: [],
+        checks: [],
+      }
+    : null;
+
+  return {
+    ...memory,
+    buyerTranscript: "",
+    requirement,
+    decision,
+    evidence: null,
+  };
 }
 
 export function safeStageForMemory(memory: CaseMemory): CaseStage {

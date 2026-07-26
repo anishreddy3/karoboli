@@ -21,6 +21,8 @@ export async function POST(request: Request) {
     phone: body.phone || "",
     area: body.area || "",
     languages: body.languages || [],
+    materials: body.materials || [],
+    deliveryRadius: body.deliveryRadius || "Not specified",
     completedOrders: body.completedOrders || 0,
     score: body.score || 0,
     consentState: body.consentState || "pending",

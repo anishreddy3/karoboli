@@ -51,24 +51,70 @@ type MemoryStatus =
 
 const CASE_ID_STORAGE_KEY = "karoboli.case-id.v1";
 
-const suppliers = [
+export type SupplierInfo = {
+  name: string;
+  area: string;
+  score: string;
+  detail: string;
+  languages: string[];
+  materials: string[];
+  deliveryRadius: string;
+};
+
+const suppliers: SupplierInfo[] = [
   {
     name: "Sri Balaji Building Supplies",
     area: "KR Puram",
     score: "96%",
-    detail: "213 completed orders · Telugu / Hindi",
+    detail: "213 completed orders",
+    languages: ["Telugu", "Hindi", "English"],
+    materials: ["Cement", "Steel", "Bricks"],
+    deliveryRadius: "30 km",
   },
   {
     name: "Metro Cement Depot",
     area: "Mahadevapura",
     score: "91%",
-    detail: "148 completed orders · Tamil / English",
+    detail: "148 completed orders",
+    languages: ["Tamil", "English"],
+    materials: ["Cement", "Ready-Mix Concrete"],
+    deliveryRadius: "15 km",
   },
   {
     name: "Sree Lakshmi Traders",
     area: "Hoskote",
     score: "89%",
-    detail: "92 completed orders · Telugu / Hindi",
+    detail: "92 completed orders",
+    languages: ["Telugu", "Kannada", "Hindi"],
+    materials: ["Aggregates", "Sand", "Cement"],
+    deliveryRadius: "45 km",
+  },
+  {
+    name: "Om Sai Steels",
+    area: "Peenya",
+    score: "98%",
+    detail: "340 completed orders",
+    languages: ["Kannada", "Hindi", "English"],
+    materials: ["TMT Bars", "Structural Steel"],
+    deliveryRadius: "50 km",
+  },
+  {
+    name: "Maruti Hardwares",
+    area: "Electronic City",
+    score: "94%",
+    detail: "185 completed orders",
+    languages: ["Hindi", "English", "Bengali"],
+    materials: ["Paints", "Plumbing", "Electricals"],
+    deliveryRadius: "20 km",
+  },
+  {
+    name: "Kaveri Enterprises",
+    area: "Yelahanka",
+    score: "87%",
+    detail: "64 completed orders",
+    languages: ["Kannada", "Telugu"],
+    materials: ["Cement", "Bricks"],
+    deliveryRadius: "25 km",
   },
 ];
 
@@ -244,8 +290,17 @@ export function KaroboliApp() {
         if (!response.ok) throw new Error(await readError(response));
         const data = (await response.json()) as { memory?: unknown };
         const parsed = caseMemorySchema.safeParse(data.memory);
-        return parsed.success
-          ? ({ ...data.memory, ...parsed.data } as StoredCaseMemory)
+        const stored = data.memory as Partial<StoredCaseMemory> | null;
+        return parsed.success &&
+          stored?.id &&
+          stored.createdAt &&
+          stored.updatedAt
+          ? ({
+              id: stored.id,
+              createdAt: stored.createdAt,
+              updatedAt: stored.updatedAt,
+              ...parsed.data,
+            } as StoredCaseMemory)
           : null;
       })
       .then((memory) => {
@@ -401,21 +456,23 @@ export function KaroboliApp() {
       };
 
       if (target === "buyer") {
-        setBuyerTranscript((current) =>
-          current
-            ? `${current}\nFollow-up: ${transcriptData.transcript}`
-            : transcriptData.transcript,
-        );
+        setBuyerTranscript((current) => {
+          const segment = transcriptData.normalized_transcript && transcriptData.normalized_transcript !== transcriptData.transcript
+            ? `${transcriptData.transcript}\n> Translation: ${transcriptData.normalized_transcript}`
+            : transcriptData.transcript;
+          return current ? `${current}\nFollow-up: ${segment}` : segment;
+        });
         await understandBuyer(
           transcriptData.normalized_transcript || transcriptData.transcript,
         );
       } else {
-        setSupplierTranscript((current) =>
-          current
-            ? `${current}\nFollow-up: ${transcriptData.transcript}`
-            : transcriptData.transcript,
-        );
-        await understandSupplier(transcriptData.transcript);
+        setSupplierTranscript((current) => {
+          const segment = transcriptData.normalized_transcript && transcriptData.normalized_transcript !== transcriptData.transcript
+            ? `${transcriptData.transcript}\n> Translation: ${transcriptData.normalized_transcript}`
+            : transcriptData.transcript;
+          return current ? `${current}\nFollow-up: ${segment}` : segment;
+        });
+        await understandSupplier(transcriptData.normalized_transcript || transcriptData.transcript);
       }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Voice processing failed.");
@@ -513,12 +570,15 @@ export function KaroboliApp() {
     setAgentText("");
     if (liveSessionRef.current) await stopLiveAgent();
 
+    const activeSupplier = suppliers.find((s) => s.name === selectedSupplier);
+
     const session = new SamvaadBrowserSession(
       {
         role,
         language,
         requirement: requirementRef.current,
         supplierName: role === "supplier" ? selectedSupplier : undefined,
+        supplierSupportedLanguages: role === "supplier" && activeSupplier ? activeSupplier.languages.join(", ") : undefined,
       },
       {
         onStatus: setAgentStatus,
@@ -1117,6 +1177,9 @@ export function KaroboliApp() {
                     <span className="supplier-copy">
                       <strong>{supplier.name}</strong>
                       <small>{supplier.area} · {supplier.detail}</small>
+                      <small style={{ marginTop: '2px', color: '#0d9488' }}>
+                        {supplier.languages.join(", ")} · {supplier.deliveryRadius}
+                      </small>
                     </span>
                     <b>{supplier.score}</b>
                   </button>
@@ -1449,6 +1512,12 @@ export function KaroboliApp() {
               <div className="stage-actions final-actions">
                 <button className="secondary-button" onClick={reset}>
                   Run another live case
+                </button>
+                <button className="secondary-button" onClick={() => window.open(`/room/buyer/${caseId}`, '_blank')}>
+                  Open Buyer Workspace <span>↗</span>
+                </button>
+                <button className="secondary-button" onClick={() => window.open(`/room/supplier/${caseId}`, '_blank')}>
+                  Preview Supplier Workspace <span>↗</span>
                 </button>
                 <button className="primary-button" onClick={() => window.print()}>
                   Export decision <span>↗</span>

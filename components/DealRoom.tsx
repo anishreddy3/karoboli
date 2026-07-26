@@ -18,6 +18,7 @@ type DealRoomProps = {
   decision: Decision | null;
   evidence: EvidenceRecord | null;
   supplierName: string;
+  fixedPerspective?: DealRoomPerspective;
 };
 
 function money(value: number) {
@@ -48,9 +49,11 @@ export function DealRoom({
   decision,
   evidence,
   supplierName,
+  fixedPerspective,
 }: DealRoomProps) {
-  const [perspective, setPerspective] =
-    useState<DealRoomPerspective>("buyer");
+  const [perspective, setPerspective] = useState<DealRoomPerspective>(fixedPerspective || "buyer");
+  const [manualEvents, setManualEvents] = useState<{ actor: string; label: string; detail: string }[]>([]);
+
   const room = buildDealRoomView(perspective, {
     requirement,
     offer,
@@ -58,6 +61,15 @@ export function DealRoom({
     evidence,
     supplierName,
   });
+
+  const fullTimeline = [...room.timeline, ...manualEvents];
+
+  const handleAction = (label: string, detail: string) => {
+    setManualEvents((prev) => [
+      ...prev,
+      { actor: perspective === "buyer" ? "Buyer (Manual)" : "Supplier (Manual)", label, detail },
+    ]);
+  };
 
   return (
     <section className="deal-room" aria-label="Live negotiation room">
@@ -70,20 +82,22 @@ export function DealRoom({
           <span className={`room-phase ${room.phase}`}>
             {phaseLabels[room.phase]}
           </span>
-          <div className="room-perspective" aria-label="Deal room perspective">
-            <button
-              className={perspective === "buyer" ? "active" : ""}
-              onClick={() => setPerspective("buyer")}
-            >
-              Buyer view
-            </button>
-            <button
-              className={perspective === "supplier" ? "active" : ""}
-              onClick={() => setPerspective("supplier")}
-            >
-              Supplier view
-            </button>
-          </div>
+          {!fixedPerspective && (
+            <div className="room-perspective" aria-label="Deal room perspective">
+              <button
+                className={perspective === "buyer" ? "active" : ""}
+                onClick={() => setPerspective("buyer")}
+              >
+                Buyer view
+              </button>
+              <button
+                className={perspective === "supplier" ? "active" : ""}
+                onClick={() => setPerspective("supplier")}
+              >
+                Supplier view
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -120,7 +134,7 @@ export function DealRoom({
         <div className="room-detail-grid">
           <div className="room-timeline">
             <span>SHARED NEGOTIATION TRAIL</span>
-            {room.timeline.map((event, index) => (
+            {fullTimeline.map((event, index) => (
               <div className="room-event" key={`${event.label}-${index}`}>
                 <i />
                 <div>
@@ -147,13 +161,15 @@ export function DealRoom({
                     : room.privateState.decisionAction.replace("-", " ")}
                 </strong>
               </div>
-              <div>
-                <small>EVIDENCE</small>
-                <strong>{room.privateState.evidenceId ?? "Created at close"}</strong>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+                <small>MANUAL ACTIONS</small>
+                <button onClick={() => handleAction("Price Negotiation", "Requested a 5% discount on total price.")}>Request Better Price</button>
+                <button onClick={() => handleAction("Delivery Expedite", "Requested delivery 2 days earlier.")}>Demand Faster Delivery</button>
+                <button onClick={() => handleAction("Approval Requested", "Purchase order sent for human approval under policy.")}>Request PO Approval</button>
+                <button onClick={() => handleAction("Escalation", "Deal escalated to procurement manager.")}>Escalate to Human</button>
               </div>
               <p>
-                Budget, competing offers and policy reasons never cross the
-                supplier boundary.
+                Budget, competing offers and policy reasons never cross the supplier boundary.
               </p>
             </div>
           ) : (
@@ -169,13 +185,15 @@ export function DealRoom({
                   {room.supplierState.outcome.replaceAll("-", " ")}
                 </strong>
               </div>
-              <div>
-                <small>COMMITMENTS SHARED</small>
-                <strong>{room.latestOffer?.commitments.length ?? 0}</strong>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+                <small>MANUAL ACTIONS</small>
+                <button onClick={() => handleAction("Counter Offer", "Proposed a new total price of ₹42,500.")}>Counter-Offer Price</button>
+                <button onClick={() => handleAction("Schedule Update", "Delivery delayed by 1 day due to logistics.")}>Update Delivery Schedule</button>
+                <button onClick={() => handleAction("Terms Accepted", "Supplier accepted the offer terms; buyer approval is still required.")}>Accept Terms</button>
+                <button onClick={() => handleAction("RFQ Declined", "Unable to fulfil order requirements.")}>Decline RFQ</button>
               </div>
               <p>
-                This view contains only the RFQ, this supplier&apos;s offer and
-                the shared outcome.
+                This view contains only the RFQ, this supplier&apos;s offer and the shared outcome.
               </p>
             </div>
           )}

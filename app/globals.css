@@ -507,6 +507,7 @@ button {
   font-family: Georgia, serif;
   font-size: 15px;
   line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 .agent-turn,

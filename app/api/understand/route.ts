@@ -237,7 +237,7 @@ export async function POST(request: Request) {
         requirement: reconcileBuyerRequirement(
           data,
           parsed.data.transcript,
-          parsed.data.existingRequirement,
+          parsed.data.existingRequirement ?? undefined,
         ),
       });
     }
@@ -274,7 +274,7 @@ export async function POST(request: Request) {
           supplierName: parsed.data.supplierName,
         },
         parsed.data.transcript,
-        parsed.data.existingOffer,
+        parsed.data.existingOffer ?? undefined,
       ),
     });
   } catch (error) {

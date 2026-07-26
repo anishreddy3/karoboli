@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { CallRecord } from "../lib/telephony.ts";
-import { upsertCall, getCall, listCalls } from "../db/telephony.ts";
+import type { CallRecord } from "../lib/telephony";
+import { upsertCall, getCall, listCalls } from "../db/telephony";
 
 const makeRecord = (id: string, status: CallRecord["status"] = "dialing"): CallRecord => ({
   id,

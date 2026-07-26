@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   caseMemorySchema,
+  supplierVisibleCaseMemory,
   type CaseMemory,
 } from "@/lib/case-memory";
 import {
@@ -46,8 +47,12 @@ export async function GET(request: Request) {
       parsedId.data,
       ownerId(request, parsedId.data),
     );
+    const visibleMemory =
+      memory && url.searchParams.get("perspective") === "supplier"
+        ? supplierVisibleCaseMemory(memory)
+        : memory;
     return memory
-      ? Response.json({ memory })
+      ? Response.json({ memory: visibleMemory })
       : Response.json({ memory: null }, { status: 404 });
   } catch (error) {
     return memoryError(error);

@@ -66,22 +66,20 @@ export async function POST(request: Request) {
     if (!data.transcript) throw new Error("Sarvam returned an empty transcript.");
 
     let normalizedTranscript = data.transcript;
-    if (incoming.get("purpose")?.toString() === "buyer") {
-      try {
-        const translatedResponse = await sarvamFetch("/speech-to-text", {
-          method: "POST",
-          body: transcriptionForm(audio, "translate", "unknown"),
-        });
-        const translated = (await translatedResponse.json()) as {
-          transcript?: string;
-        };
-        if (translated.transcript) normalizedTranscript = translated.transcript;
-      } catch (error) {
-        console.warn(
-          "Buyer translation channel unavailable; using original transcript:",
-          error instanceof Error ? error.message : String(error),
-        );
-      }
+    try {
+      const translatedResponse = await sarvamFetch("/speech-to-text", {
+        method: "POST",
+        body: transcriptionForm(audio, "translate", "unknown"),
+      });
+      const translated = (await translatedResponse.json()) as {
+        transcript?: string;
+      };
+      if (translated.transcript) normalizedTranscript = translated.transcript;
+    } catch (error) {
+      console.warn(
+        "Translation channel unavailable; using original transcript:",
+        error instanceof Error ? error.message : String(error),
+      );
     }
 
     return Response.json({
