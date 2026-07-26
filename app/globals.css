@@ -692,7 +692,64 @@ button {
   color: var(--green);
 }
 
+.case-memory-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 38px;
+  border-bottom: 1px solid #d8e8e1;
+  background: #f3faf7;
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+}
+
+.case-memory-bar > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.case-memory-bar i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgb(31 107 77 / 10%);
+}
+
+.case-memory-bar small {
+  color: var(--muted);
+  font-family: var(--font-geist-sans), sans-serif;
+  font-size: 9px;
+}
+
+.case-memory-bar.loading i,
+.case-memory-bar.saving i {
+  animation: pulse-memory 1s ease-in-out infinite alternate;
+}
+
+.case-memory-bar.unavailable {
+  border-bottom-color: #f1c9c4;
+  background: #fff0ee;
+}
+
+.case-memory-bar.unavailable,
+.case-memory-bar.unavailable small {
+  color: var(--red);
+}
+
+@keyframes pulse-memory {
+  to {
+    opacity: 0.35;
+  }
+}
+
 .fallback-banner,
+.handoff-banner,
 .error-banner {
   display: flex;
   align-items: center;
@@ -709,6 +766,21 @@ button {
 
 .fallback-banner span {
   color: #766746;
+}
+
+.handoff-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 38px;
+  border-bottom: 1px solid #bfe2d2;
+  background: #eefaf4;
+  color: var(--green);
+  font-size: 11px;
+}
+
+.handoff-banner span {
+  color: var(--muted);
 }
 
 .error-banner {
@@ -869,6 +941,244 @@ button {
 .correction s {
   color: var(--muted);
   font-weight: 500;
+}
+
+.deal-room {
+  overflow: hidden;
+  margin-top: 20px;
+  border: 1px solid #c9d4cc;
+  border-radius: 7px;
+  background: #fbfcfa;
+}
+
+.deal-room-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 15px;
+  border-bottom: 1px solid #dce3de;
+  background: #edf4ef;
+}
+
+.deal-room-header > div:first-child span,
+.deal-room-header > div:first-child strong {
+  display: block;
+}
+
+.deal-room-header > div:first-child span {
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.deal-room-header > div:first-child strong {
+  margin-top: 3px;
+  font-size: 11px;
+}
+
+.room-header-actions,
+.room-perspective {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-phase {
+  padding: 6px 8px;
+  border-radius: 3px;
+  background: #dfe8e1;
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.room-phase.clarification {
+  background: #fff0cf;
+  color: #805c12;
+}
+
+.room-phase.closed {
+  background: var(--green);
+  color: white;
+}
+
+.room-perspective {
+  overflow: hidden;
+  gap: 0;
+  border: 1px solid #bcc9c0;
+  border-radius: 4px;
+  background: white;
+}
+
+.room-perspective button {
+  padding: 6px 9px;
+  border: 0;
+  border-right: 1px solid #d5ddd7;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.room-perspective button:last-child {
+  border-right: 0;
+}
+
+.room-perspective button.active {
+  background: var(--green);
+  color: white;
+}
+
+.deal-room-body {
+  padding: 14px;
+}
+
+.room-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid #e1e5e2;
+  border-radius: 5px;
+  background: white;
+}
+
+.room-summary > div {
+  min-width: 0;
+  padding: 11px 12px;
+  border-right: 1px solid #e1e5e2;
+}
+
+.room-summary > div:last-child {
+  border-right: 0;
+}
+
+.room-summary span,
+.room-summary strong,
+.room-summary small {
+  display: block;
+}
+
+.room-summary span,
+.room-timeline > span,
+.room-private > span {
+  color: var(--muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.room-summary strong {
+  overflow: hidden;
+  margin-top: 4px;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-summary small {
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-detail-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 0.85fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.room-timeline,
+.room-private {
+  padding: 12px;
+  border: 1px solid #e1e5e2;
+  border-radius: 5px;
+  background: white;
+}
+
+.room-event {
+  display: grid;
+  grid-template-columns: 8px 1fr;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.room-event > i {
+  width: 7px;
+  height: 7px;
+  margin-top: 3px;
+  border: 2px solid var(--green);
+  border-radius: 50%;
+  background: white;
+}
+
+.room-event small,
+.room-event strong {
+  display: block;
+}
+
+.room-event small {
+  color: var(--green);
+  font-size: 7px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.room-event strong {
+  margin-top: 1px;
+  font-size: 9px;
+}
+
+.room-event p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+.room-private {
+  background: #f8f5ef;
+}
+
+.room-private > div {
+  padding: 8px 0;
+  border-bottom: 1px solid #e5e0d8;
+}
+
+.room-private > div small,
+.room-private > div strong {
+  display: block;
+}
+
+.room-private > div small {
+  color: var(--muted);
+  font-size: 7px;
+}
+
+.room-private > div strong {
+  margin-top: 2px;
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
+.room-private > p {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.supplier-private {
+  background: #f3f7fb;
 }
 
 .decision-heading {
@@ -1306,6 +1616,11 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .room-header-actions {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+
   .score-strip {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1324,6 +1639,12 @@ button {
 
   .provider-switch > span {
     width: 100%;
+  }
+
+  .case-memory-bar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 10px 20px;
   }
 
   .hero {
@@ -1357,8 +1678,29 @@ button {
 
   .offer-result,
   .po-parties,
-  .evidence-strip {
+  .evidence-strip,
+  .room-summary,
+  .room-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .deal-room-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .room-header-actions {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .room-summary > div {
+    border-right: 0;
+    border-bottom: 1px solid #e1e5e2;
+  }
+
+  .room-summary > div:last-child {
+    border-bottom: 0;
   }
 
   .offer-price {
@@ -1399,6 +1741,7 @@ button {
   .topbar,
   .hero,
   .steps,
+  .case-memory-bar,
   .stage-actions,
   .score-strip,
   .site-footer {

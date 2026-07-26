@@ -25,6 +25,9 @@ awaits the provisioned organization, workspace, and committed Samvaad app ID.
 - Expose deterministic Karoboli functions as authenticated Samvaad tools.
 - Run three unseen repeat cases: Telugu buyer, Tamil buyer, and English buyer;
   each with a Hinglish supplier reply.
+- Persist versioned buyer and supplier case memory in Cloudflare D1.
+- Serialize live transcript turns and automatically hand a complete buyer brief
+  to supplier matching.
 
 ## Milestone 3 — Supporting Sarvam agents
 
@@ -54,6 +57,10 @@ configuration a critical dependency.
 
 ## Milestone 5 — Production procurement
 
+- Server-enforced buyer and supplier views over one negotiation room per RFQ.
+- Supplier links expose only the shared requirement, that supplier's offer and
+  the final outcome; buyer budgets, competing offers and policy reasons remain
+  private.
 - Tenant-specific policies and human approval queues.
 - Verified supplier directory and consent controls.
 - Sarvam campaigns and cohorts for scheduled or parallel supplier calling,
@@ -61,6 +68,10 @@ configuration a critical dependency.
 - ERP/PO integration through idempotent adapters.
 - Retention, encryption, access control, redaction, and audit export.
 - Usage-based billing after real call-cost measurements.
+
+Commercial packaging, bottom-up market assumptions and the buildathon Q&A
+answer are documented in
+[deal rooms, pricing and monetization](./deal-room-and-monetization.md).
 
 ## Milestone branches
 
@@ -74,3 +85,5 @@ onto the previous completed milestone before implementation begins.
 
 See [the Sarvam agent integration strategy](./sarvam-agent-integration.md) for
 the provider options, required account values, and fallback architecture.
+See [buyer and supplier memory](./memory-and-context.md) for the implemented D1
+record, identity scope and production access-control boundary.
