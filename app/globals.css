@@ -309,6 +309,46 @@ button {
   box-shadow: 0 18px 50px rgb(23 34 29 / 6%);
 }
 
+.provider-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 38px;
+  border-bottom: 1px solid var(--line);
+  background: #f8f6ef;
+}
+
+.provider-switch > span {
+  margin-right: auto;
+  color: var(--muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+}
+
+.provider-switch button {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: white;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.provider-switch button.active {
+  border-color: var(--green);
+  background: #e9f7ef;
+  color: var(--green);
+}
+
+.provider-switch button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .stage-content {
   padding: 36px 38px;
 }
@@ -467,6 +507,58 @@ button {
   font-family: Georgia, serif;
   font-size: 15px;
   line-height: 1.55;
+}
+
+.agent-turn,
+.follow-up-card {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid #b8d7c6;
+  border-radius: 6px;
+  background: #f1faf5;
+}
+
+.agent-turn > span,
+.follow-up-card > span {
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.09em;
+}
+
+.agent-turn p {
+  margin: 7px 0 0;
+  font-family: Georgia, serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.follow-up-card {
+  border-color: #e4c48d;
+  background: #fff9ea;
+}
+
+.follow-up-card > span {
+  color: #94651c;
+}
+
+.follow-up-card strong,
+.follow-up-card small {
+  display: block;
+}
+
+.follow-up-card strong {
+  margin-top: 7px;
+  font-family: Georgia, serif;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.follow-up-card small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 9px;
 }
 
 .facts-grid {
@@ -777,6 +869,244 @@ button {
 .correction s {
   color: var(--muted);
   font-weight: 500;
+}
+
+.deal-room {
+  overflow: hidden;
+  margin-top: 20px;
+  border: 1px solid #c9d4cc;
+  border-radius: 7px;
+  background: #fbfcfa;
+}
+
+.deal-room-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 13px 15px;
+  border-bottom: 1px solid #dce3de;
+  background: #edf4ef;
+}
+
+.deal-room-header > div:first-child span,
+.deal-room-header > div:first-child strong {
+  display: block;
+}
+
+.deal-room-header > div:first-child span {
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.deal-room-header > div:first-child strong {
+  margin-top: 3px;
+  font-size: 11px;
+}
+
+.room-header-actions,
+.room-perspective {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-phase {
+  padding: 6px 8px;
+  border-radius: 3px;
+  background: #dfe8e1;
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.room-phase.clarification {
+  background: #fff0cf;
+  color: #805c12;
+}
+
+.room-phase.closed {
+  background: var(--green);
+  color: white;
+}
+
+.room-perspective {
+  overflow: hidden;
+  gap: 0;
+  border: 1px solid #bcc9c0;
+  border-radius: 4px;
+  background: white;
+}
+
+.room-perspective button {
+  padding: 6px 9px;
+  border: 0;
+  border-right: 1px solid #d5ddd7;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.room-perspective button:last-child {
+  border-right: 0;
+}
+
+.room-perspective button.active {
+  background: var(--green);
+  color: white;
+}
+
+.deal-room-body {
+  padding: 14px;
+}
+
+.room-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid #e1e5e2;
+  border-radius: 5px;
+  background: white;
+}
+
+.room-summary > div {
+  min-width: 0;
+  padding: 11px 12px;
+  border-right: 1px solid #e1e5e2;
+}
+
+.room-summary > div:last-child {
+  border-right: 0;
+}
+
+.room-summary span,
+.room-summary strong,
+.room-summary small {
+  display: block;
+}
+
+.room-summary span,
+.room-timeline > span,
+.room-private > span {
+  color: var(--muted);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.room-summary strong {
+  overflow: hidden;
+  margin-top: 4px;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-summary small {
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.room-detail-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 0.85fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.room-timeline,
+.room-private {
+  padding: 12px;
+  border: 1px solid #e1e5e2;
+  border-radius: 5px;
+  background: white;
+}
+
+.room-event {
+  display: grid;
+  grid-template-columns: 8px 1fr;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.room-event > i {
+  width: 7px;
+  height: 7px;
+  margin-top: 3px;
+  border: 2px solid var(--green);
+  border-radius: 50%;
+  background: white;
+}
+
+.room-event small,
+.room-event strong {
+  display: block;
+}
+
+.room-event small {
+  color: var(--green);
+  font-size: 7px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.room-event strong {
+  margin-top: 1px;
+  font-size: 9px;
+}
+
+.room-event p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+.room-private {
+  background: #f8f5ef;
+}
+
+.room-private > div {
+  padding: 8px 0;
+  border-bottom: 1px solid #e5e0d8;
+}
+
+.room-private > div small,
+.room-private > div strong {
+  display: block;
+}
+
+.room-private > div small {
+  color: var(--muted);
+  font-size: 7px;
+}
+
+.room-private > div strong {
+  margin-top: 2px;
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
+.room-private > p {
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.supplier-private {
+  background: #f3f7fb;
 }
 
 .decision-heading {
@@ -1214,6 +1544,11 @@ button {
     grid-template-columns: 1fr;
   }
 
+  .room-header-actions {
+    align-items: flex-end;
+    flex-direction: column;
+  }
+
   .score-strip {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1223,6 +1558,15 @@ button {
   .build-label,
   .hero-proof {
     display: none;
+  }
+
+  .provider-switch {
+    flex-wrap: wrap;
+    padding: 10px 20px;
+  }
+
+  .provider-switch > span {
+    width: 100%;
   }
 
   .hero {
@@ -1256,8 +1600,29 @@ button {
 
   .offer-result,
   .po-parties,
-  .evidence-strip {
+  .evidence-strip,
+  .room-summary,
+  .room-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .deal-room-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .room-header-actions {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .room-summary > div {
+    border-right: 0;
+    border-bottom: 1px solid #e1e5e2;
+  }
+
+  .room-summary > div:last-child {
+    border-bottom: 0;
   }
 
   .offer-price {
@@ -1314,4 +1679,81 @@ button {
     display: block;
     padding: 0;
   }
+}
+
+/* ── Milestone 4 — Telephony ──────────────────────────────── */
+
+.call-status-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 12px 15px;
+  border: 1px solid #b8d7c6;
+  border-radius: 6px;
+  background: #f1faf5;
+  font-size: 11px;
+}
+
+.call-status-badge > span {
+  color: var(--green);
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.09em;
+}
+
+.call-status-badge > strong {
+  font-size: 13px;
+}
+
+.call-status-badge.failed {
+  border-color: #f1c9c4;
+  background: #fff0ee;
+}
+
+.call-status-badge.failed > span {
+  color: var(--red);
+}
+
+.escalation-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: #fff3cd;
+  color: #856404;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.human-approval-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid #f5c518;
+  border-left: 4px solid #f5c518;
+  border-radius: 6px;
+  background: #fff9e6;
+  font-size: 12px;
+}
+
+.human-approval-banner strong {
+  font-size: 14px;
+  color: #92681a;
+}
+
+.human-approval-banner span {
+  color: #5c4020;
+  line-height: 1.5;
+}
+
+.human-approval-banner small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
 }

@@ -33,10 +33,13 @@ export type BuyerRequirement = z.infer<typeof buyerRequirementSchema>;
 
 export const supplierOfferSchema = z.object({
   supplierName: z.string().min(1),
-  totalPrice: z.number().positive(),
+  totalPrice: z.number().nonnegative(),
   unitPrice: z.number().positive().nullable(),
-  deliveryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  paymentTerm: paymentTermSchema,
+  deliveryDate: z.union([
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    z.literal("unknown"),
+  ]),
+  paymentTerm: z.union([paymentTermSchema, z.literal("unknown")]),
   freightIncluded: z.boolean(),
   unloadingIncluded: z.boolean(),
   gstIncluded: z.boolean(),

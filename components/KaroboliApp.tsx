@@ -9,6 +9,7 @@ import type {
   PurchaseOrder,
   SupplierOffer,
 } from "@/lib/domain";
+import type { CallRecord } from "@/lib/telephony";
 import {
   fallbackBuyerTranscript,
   fallbackOffer,
@@ -20,11 +21,19 @@ import {
   createPurchaseOrder,
   evaluateOffer,
 } from "@/lib/policy";
+import { nextBuyerQuestion, nextSupplierQuestion } from "@/lib/follow-up";
+import {
+  SamvaadBrowserSession,
+  type SamvaadRole,
+  type SamvaadStatus,
+} from "@/lib/samvaad-browser";
+import { DealRoom } from "./DealRoom";
 
 type Stage = "brief" | "supplier" | "decision";
 type RecordingTarget = "buyer" | "supplier";
 type CapabilityStatus = "checking" | "live" | "offline";
 type BuyerLanguage = Language | "unknown";
+type VoiceMode = "realtime" | "composed";
 
 const suppliers = [
   {
@@ -151,6 +160,11 @@ async function browserAudioToWav(blob: Blob): Promise<Blob> {
 export function KaroboliApp() {
   const [stage, setStage] = useState<Stage>("brief");
   const [capability, setCapability] = useState<CapabilityStatus>("checking");
+  const [realtimeAvailable, setRealtimeAvailable] = useState(false);
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>("composed");
+  const [liveRole, setLiveRole] = useState<SamvaadRole | null>(null);
+  const [agentStatus, setAgentStatus] = useState<SamvaadStatus>("idle");
+  const [agentText, setAgentText] = useState("");
   const [language, setLanguage] = useState<BuyerLanguage>("unknown");
   const [recording, setRecording] = useState<RecordingTarget | null>(null);
   const [busy, setBusy] = useState<RecordingTarget | "voice" | null>(null);
@@ -164,17 +178,32 @@ export function KaroboliApp() {
   const [selectedSupplier, setSelectedSupplier] = useState(suppliers[0].name);
   const [error, setError] = useState("");
   const [fallbackUsed, setFallbackUsed] = useState(false);
+  const [telephonyConfigured, setTelephonyConfigured] = useState(false);
+  const [callRecord, setCallRecord] = useState<CallRecord | null>(null);
+  const [callBusy, setCallBusy] = useState(false);
+  const callPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const targetRef = useRef<RecordingTarget>("buyer");
+  const liveSessionRef = useRef<SamvaadBrowserSession | null>(null);
+  const requirementRef = useRef<BuyerRequirement | null>(null);
+  const offerRef = useRef<SupplierOffer | null>(null);
 
   useEffect(() => {
     fetch("/api/capabilities")
       .then((response) => response.json())
-      .then((data: { sarvam?: boolean }) =>
-        setCapability(data.sarvam ? "live" : "offline"),
-      )
+      .then((data: { sarvam?: boolean; samvaadRealtime?: boolean; telephonyConfigured?: boolean }) => {
+        setCapability(data.sarvam || data.samvaadRealtime ? "live" : "offline");
+        setRealtimeAvailable(Boolean(data.samvaadRealtime));
+        if (data.samvaadRealtime) setVoiceMode("realtime");
+        setTelephonyConfigured(Boolean(data.telephonyConfigured));
+      })
       .catch(() => setCapability("offline"));
+
+    return () => {
+      void liveSessionRef.current?.stop();
+      if (callPollRef.current) clearInterval(callPollRef.current);
+    };
   }, []);
 
   async function startRecording(target: RecordingTarget) {
@@ -245,12 +274,20 @@ export function KaroboliApp() {
       };
 
       if (target === "buyer") {
-        setBuyerTranscript(transcriptData.transcript);
+        setBuyerTranscript((current) =>
+          current
+            ? `${current}\nFollow-up: ${transcriptData.transcript}`
+            : transcriptData.transcript,
+        );
         await understandBuyer(
           transcriptData.normalized_transcript || transcriptData.transcript,
         );
       } else {
-        setSupplierTranscript(transcriptData.transcript);
+        setSupplierTranscript((current) =>
+          current
+            ? `${current}\nFollow-up: ${transcriptData.transcript}`
+            : transcriptData.transcript,
+        );
         await understandSupplier(transcriptData.transcript);
       }
     } catch (caught) {
@@ -264,10 +301,16 @@ export function KaroboliApp() {
     const response = await fetch("/api/understand", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "buyer", transcript, language }),
+      body: JSON.stringify({
+        kind: "buyer",
+        transcript,
+        language,
+        existingRequirement: requirementRef.current,
+      }),
     });
     if (!response.ok) throw new Error(await readError(response));
     const data = (await response.json()) as { requirement: BuyerRequirement };
+    requirementRef.current = data.requirement;
     setRequirement(data.requirement);
   }
 
@@ -282,11 +325,81 @@ export function KaroboliApp() {
         language: "hi-IN",
         supplierName: selectedSupplier,
         buyerRequirement: requirement,
+        existingOffer: offerRef.current,
       }),
     });
     if (!response.ok) throw new Error(await readError(response));
     const data = (await response.json()) as { offer: SupplierOffer };
+    offerRef.current = data.offer;
     setOffer(data.offer);
+  }
+
+  async function stopLiveAgent() {
+    const session = liveSessionRef.current;
+    liveSessionRef.current = null;
+    setLiveRole(null);
+    setAgentStatus("ended");
+    if (session) await session.stop();
+  }
+
+  async function startLiveAgent(role: SamvaadRole) {
+    setError("");
+    setAgentText("");
+    if (liveSessionRef.current) await stopLiveAgent();
+
+    const session = new SamvaadBrowserSession(
+      {
+        role,
+        language,
+        requirement: requirementRef.current,
+        supplierName: role === "supplier" ? selectedSupplier : undefined,
+      },
+      {
+        onStatus: setAgentStatus,
+        onAgentText: (text) =>
+          setAgentText((current) =>
+            !current || text.startsWith(current) ? text : `${current}${text}`,
+          ),
+        onEvent: (event) => {
+          if (
+            event.includes("interaction_end") ||
+            event === "gateway.session_closed"
+          ) {
+            setLiveRole(null);
+            liveSessionRef.current = null;
+          }
+        },
+        onError: (message) => setError(message),
+        onTranscript: ({ role: speaker, content }) => {
+          if (!speaker.toLowerCase().includes("user") || !content.trim()) return;
+          if (role === "buyer") {
+            setBuyerTranscript((current) =>
+              current ? `${current}\n${content}` : content,
+            );
+            void understandBuyer(content);
+          } else {
+            setSupplierTranscript((current) =>
+              current ? `${current}\n${content}` : content,
+            );
+            void understandSupplier(content);
+          }
+        },
+      },
+    );
+    liveSessionRef.current = session;
+    setLiveRole(role);
+    try {
+      await session.start();
+    } catch (caught) {
+      await session.stop();
+      liveSessionRef.current = null;
+      setLiveRole(null);
+      setError(
+        caught instanceof Error
+          ? `${caught.message} Switch to composed mode to continue.`
+          : "Samvaad streaming failed. Switch to composed mode to continue.",
+      );
+    }
   }
 
   async function runDecision(nextRequirement = requirement, nextOffer = offer) {
@@ -321,6 +434,8 @@ export function KaroboliApp() {
     setError("");
     setBuyerTranscript(fallbackBuyerTranscript);
     setSupplierTranscript(fallbackSupplierTranscript);
+    requirementRef.current = fallbackRequirement;
+    offerRef.current = fallbackOffer;
     setRequirement(fallbackRequirement);
     setOffer(fallbackOffer);
     setSelectedSupplier(fallbackOffer.supplierName);
@@ -383,6 +498,7 @@ export function KaroboliApp() {
   }
 
   function reset() {
+    void stopLiveAgent();
     setStage("brief");
     setBuyerTranscript("");
     setSupplierTranscript("");
@@ -391,9 +507,68 @@ export function KaroboliApp() {
     setDecision(null);
     setPurchaseOrder(null);
     setEvidence(null);
+    requirementRef.current = null;
+    offerRef.current = null;
+    setAgentText("");
+    setAgentStatus("idle");
     setError("");
     setFallbackUsed(false);
+    setCallRecord(null);
+    if (callPollRef.current) {
+      clearInterval(callPollRef.current);
+      callPollRef.current = null;
+    }
   }
+
+  async function callSupplier() {
+    if (!requirement || callBusy) return;
+    setCallBusy(true);
+    setError("");
+    const supplierInfo = suppliers.find((s) => s.name === selectedSupplier);
+    try {
+      const response = await fetch("/api/telephony/outbound", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplierName: selectedSupplier,
+          supplierPhone: supplierInfo ? "91-DEMO-9999" : "91-DEMO-9999",
+          requirement,
+        }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error || `Call failed (${response.status})`);
+      }
+      const data = (await response.json()) as { callId: string; record: CallRecord };
+      setCallRecord(data.record);
+
+      // Poll for call status updates
+      if (callPollRef.current) clearInterval(callPollRef.current);
+      callPollRef.current = setInterval(async () => {
+        try {
+          const pollResponse = await fetch(`/api/telephony/calls/${data.callId}`);
+          if (pollResponse.ok) {
+            const pollData = (await pollResponse.json()) as { call: CallRecord };
+            setCallRecord(pollData.call);
+            if (
+              pollData.call.status === "completed" ||
+              pollData.call.status === "failed"
+            ) {
+              clearInterval(callPollRef.current!);
+              callPollRef.current = null;
+            }
+          }
+        } catch {
+          // polling failure is non-fatal
+        }
+      }, 3000);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Call failed.");
+    } finally {
+      setCallBusy(false);
+    }
+  }
+
 
   const requirementReady =
     requirement !== null &&
@@ -404,6 +579,8 @@ export function KaroboliApp() {
     requirement.preferredPaymentTerm !== "unknown";
   const guardrails = requirementReady ? buildGuardrails(requirement) : null;
   const stepNumber = stage === "brief" ? 1 : stage === "supplier" ? 2 : 3;
+  const buyerQuestion = nextBuyerQuestion(requirement);
+  const supplierQuestion = nextSupplierQuestion(offer);
 
   return (
     <main>
@@ -417,8 +594,12 @@ export function KaroboliApp() {
             <i />
             {capability === "checking"
               ? "Checking Sarvam"
-              : capability === "live"
-                ? "Sarvam live"
+              : liveRole
+                ? `Samvaad ${agentStatus}`
+                : realtimeAvailable && voiceMode === "realtime"
+                  ? "Samvaad ready"
+                  : capability === "live"
+                    ? "Sarvam live"
                 : "Fallback ready"}
           </span>
           <span className="build-label">EPOCH BUILD · BLR</span>
@@ -438,13 +619,19 @@ export function KaroboliApp() {
           conversation.
         </p>
         <div className="hero-proof">
-          <span>Saaras v3</span>
-          <b>→</b>
-          <span>Sarvam-30B</span>
+          <span>
+            {realtimeAvailable && voiceMode === "realtime"
+              ? "Samvaad Agent"
+              : "Saaras v3"}
+          </span>
           <b>→</b>
           <span>Policy engine</span>
           <b>→</b>
-          <span>Bulbul v3</span>
+          <span>
+            {realtimeAvailable && voiceMode === "realtime"
+              ? "Streaming voice"
+              : "Sarvam-30B + Bulbul v3"}
+          </span>
         </div>
       </section>
 
@@ -490,6 +677,30 @@ export function KaroboliApp() {
         </aside>
 
         <div className="stage-card">
+          {realtimeAvailable && (
+            <div className="provider-switch" aria-label="Voice provider">
+              <span>VOICE PATH</span>
+              <button
+                className={voiceMode === "realtime" ? "active" : ""}
+                onClick={() => {
+                  setVoiceMode("realtime");
+                  setFallbackUsed(false);
+                }}
+                disabled={liveRole !== null}
+              >
+                Samvaad streaming
+              </button>
+              <button
+                className={voiceMode === "composed" ? "active" : ""}
+                onClick={() => {
+                  void stopLiveAgent();
+                  setVoiceMode("composed");
+                }}
+              >
+                Composed fallback
+              </button>
+            </div>
+          )}
           {fallbackUsed && (
             <div className="fallback-banner">
               <strong>Disclosed fallback case</strong>
@@ -532,7 +743,11 @@ export function KaroboliApp() {
                 </select>
               </header>
 
-              <div className={`voice-pad ${recording === "buyer" ? "recording" : ""}`}>
+              <div
+                className={`voice-pad ${
+                  recording === "buyer" || liveRole === "buyer" ? "recording" : ""
+                }`}
+              >
                 <div className="wave" aria-hidden="true">
                   {Array.from({ length: 23 }).map((_, index) => (
                     <i key={index} style={{ animationDelay: `${index * 40}ms` }} />
@@ -540,20 +755,51 @@ export function KaroboliApp() {
                 </div>
                 <button
                   className="record-button"
-                  onClick={() =>
-                    recording === "buyer" ? stopRecording() : startRecording("buyer")
+                  onClick={() => {
+                    if (voiceMode === "realtime") {
+                      void (liveRole === "buyer"
+                        ? stopLiveAgent()
+                        : startLiveAgent("buyer"));
+                    } else if (recording === "buyer") {
+                      stopRecording();
+                    } else {
+                      void startRecording("buyer");
+                    }
+                  }}
+                  disabled={
+                    busy !== null ||
+                    recording === "supplier" ||
+                    (liveRole !== null && liveRole !== "buyer")
                   }
-                  disabled={busy !== null || recording === "supplier"}
                 >
-                  <span>{recording === "buyer" ? "■" : "●"}</span>
-                  {recording === "buyer"
-                    ? "Stop & process"
-                    : busy === "buyer"
-                      ? "Sarvam is listening…"
-                      : "Record buyer brief"}
+                  <span>
+                    {recording === "buyer" || liveRole === "buyer" ? "■" : "●"}
+                  </span>
+                  {voiceMode === "realtime"
+                    ? liveRole === "buyer"
+                      ? "End live conversation"
+                      : agentStatus === "connecting"
+                        ? "Connecting Samvaad…"
+                        : "Start live buyer agent"
+                    : recording === "buyer"
+                      ? "Stop & process"
+                      : busy === "buyer"
+                        ? "Sarvam is listening…"
+                        : "Record buyer brief"}
                 </button>
-                <p>Best under 30 seconds · microphone only leaves for transcription</p>
+                <p>
+                  {voiceMode === "realtime"
+                    ? "Streaming 16 kHz speech · interruptions enabled"
+                    : "Best under 30 seconds · microphone only leaves for transcription"}
+                </p>
               </div>
+
+              {(agentText || liveRole === "buyer") && (
+                <div className="agent-turn" aria-live="polite">
+                  <span>LIVE SAMVAAD AGENT · {agentStatus.toUpperCase()}</span>
+                  <p>{agentText || "Listening for the buyer brief…"}</p>
+                </div>
+              )}
 
               {buyerTranscript && (
                 <div className="transcript-block">
@@ -594,12 +840,23 @@ export function KaroboliApp() {
                     <Fact label="PAYMENT" value={requirement.preferredPaymentTerm} />
                   </div>
                   {requirement.needsConfirmation ? (
-                    <div className="confirm-box">
-                      <strong>Confirmation required</strong>
-                      <span>
-                        Missing or uncertain: {requirement.missingFields.join(", ")}
-                      </span>
-                    </div>
+                    <>
+                      <div className="confirm-box">
+                        <strong>Confirmation required</strong>
+                        <span>
+                          Missing or uncertain: {requirement.missingFields.join(", ")}
+                        </span>
+                      </div>
+                      {buyerQuestion && (
+                        <div className="follow-up-card">
+                          <span>ONE TARGETED FOLLOW-UP</span>
+                          <strong>{buyerQuestion}</strong>
+                          <small>
+                            Answer naturally; existing confirmed facts will be preserved.
+                          </small>
+                        </div>
+                      )}
+                    </>
                   ) : (
                     <div className="confirmed-box">
                       <span>✓</span>
@@ -678,7 +935,13 @@ export function KaroboliApp() {
                 </p>
               </div>
 
-              <div className={`voice-pad compact ${recording === "supplier" ? "recording" : ""}`}>
+              <div
+                className={`voice-pad compact ${
+                  recording === "supplier" || liveRole === "supplier"
+                    ? "recording"
+                    : ""
+                }`}
+              >
                 <div className="wave" aria-hidden="true">
                   {Array.from({ length: 23 }).map((_, index) => (
                     <i key={index} style={{ animationDelay: `${index * 40}ms` }} />
@@ -686,21 +949,48 @@ export function KaroboliApp() {
                 </div>
                 <button
                   className="record-button"
-                  onClick={() =>
-                    recording === "supplier"
-                      ? stopRecording()
-                      : startRecording("supplier")
+                  onClick={() => {
+                    if (voiceMode === "realtime") {
+                      void (liveRole === "supplier"
+                        ? stopLiveAgent()
+                        : startLiveAgent("supplier"));
+                    } else if (recording === "supplier") {
+                      stopRecording();
+                    } else {
+                      void startRecording("supplier");
+                    }
+                  }}
+                  disabled={
+                    busy !== null ||
+                    recording === "buyer" ||
+                    (liveRole !== null && liveRole !== "supplier")
                   }
-                  disabled={busy !== null || recording === "buyer"}
                 >
-                  <span>{recording === "supplier" ? "■" : "●"}</span>
-                  {recording === "supplier"
-                    ? "Stop & process"
-                    : busy === "supplier"
-                      ? "Resolving corrections…"
-                      : "Record supplier reply"}
+                  <span>
+                    {recording === "supplier" || liveRole === "supplier"
+                      ? "■"
+                      : "●"}
+                  </span>
+                  {voiceMode === "realtime"
+                    ? liveRole === "supplier"
+                      ? "End live negotiation"
+                      : agentStatus === "connecting"
+                        ? "Connecting Samvaad…"
+                        : "Start live supplier agent"
+                    : recording === "supplier"
+                      ? "Stop & process"
+                      : busy === "supplier"
+                        ? "Resolving corrections…"
+                        : "Record supplier reply"}
                 </button>
               </div>
+
+              {(agentText || liveRole === "supplier") && (
+                <div className="agent-turn" aria-live="polite">
+                  <span>LIVE SAMVAAD AGENT · {agentStatus.toUpperCase()}</span>
+                  <p>{agentText || "Opening the supplier negotiation…"}</p>
+                </div>
+              )}
 
               {supplierTranscript && (
                 <div className="transcript-block">
@@ -710,44 +1000,99 @@ export function KaroboliApp() {
               )}
 
               {offer && (
-                <div className="offer-result">
-                  <div className="offer-price">
-                    <span>FINAL LANDED TOTAL</span>
-                    <strong>{money(offer.totalPrice)}</strong>
-                    <small>
-                      {offer.unitPrice ? `${money(offer.unitPrice)} / ${requirement.unit.replace(/s$/, "")}` : "Unit price not stated"}
-                    </small>
+                <>
+                  <div className="offer-result">
+                    <div className="offer-price">
+                      <span>FINAL LANDED TOTAL</span>
+                      <strong>
+                        {offer.totalPrice > 0
+                          ? money(offer.totalPrice)
+                          : "Needs confirmation"}
+                      </strong>
+                      <small>
+                        {offer.unitPrice
+                          ? `${money(offer.unitPrice)} / ${requirement.unit.replace(/s$/, "")}`
+                          : "Unit price not stated"}
+                      </small>
+                    </div>
+                    <div className="commitment-list">
+                      {offer.corrections.map((correction) => (
+                        <div className="correction" key={correction.evidence}>
+                          <span>SELF-CORRECTION RESOLVED</span>
+                          <strong>
+                            <s>{money(correction.before)}</s> → {money(correction.after)}
+                          </strong>
+                        </div>
+                      ))}
+                      {offer.commitments.slice(0, 4).map((commitment) => (
+                        <p key={commitment}>
+                          <i>✓</i> {commitment}
+                        </p>
+                      ))}
+                    </div>
                   </div>
-                  <div className="commitment-list">
-                    {offer.corrections.map((correction) => (
-                      <div className="correction" key={correction.evidence}>
-                        <span>SELF-CORRECTION RESOLVED</span>
-                        <strong>
-                          <s>{money(correction.before)}</s> → {money(correction.after)}
-                        </strong>
-                      </div>
-                    ))}
-                    {offer.commitments.slice(0, 4).map((commitment) => (
-                      <p key={commitment}>
-                        <i>✓</i> {commitment}
-                      </p>
-                    ))}
-                  </div>
-                </div>
+                  {offer.needsConfirmation && supplierQuestion && (
+                    <div className="follow-up-card">
+                      <span>ONE TARGETED FOLLOW-UP</span>
+                      <strong>{supplierQuestion}</strong>
+                      <small>
+                        The offer will not reach policy evaluation until this is clear.
+                      </small>
+                    </div>
+                  )}
+                </>
               )}
+
+              <DealRoom
+                requirement={requirement}
+                offer={offer}
+                decision={null}
+                evidence={null}
+                supplierName={selectedSupplier}
+              />
 
               <div className="stage-actions">
                 <button className="secondary-button" onClick={() => setStage("brief")}>
                   ← Back
                 </button>
+                {telephonyConfigured && (
+                  <button
+                    className="secondary-button"
+                    disabled={!requirement || callBusy}
+                    onClick={() => void callSupplier()}
+                    title="Trigger a live outbound call to the supplier via Sarvam telephony"
+                  >
+                    {callBusy ? "Dialling…" : "📞 Call supplier"}
+                  </button>
+                )}
                 <button
                   className="primary-button"
-                  disabled={!offer}
+                  disabled={!offer || offer.needsConfirmation}
                   onClick={() => runDecision()}
                 >
                   Apply guardrails <span>→</span>
                 </button>
               </div>
+              {callRecord && (
+                <div className={`call-status-badge ${callRecord.status}`} aria-live="polite">
+                  <span>TELEPHONY</span>
+                  <strong>
+                    {callRecord.supplierName} ·{" "}
+                    {callRecord.status === "dialing"
+                      ? "Dialling…"
+                      : callRecord.status === "connected"
+                        ? "Connected"
+                        : callRecord.status === "completed"
+                          ? "✓ Call completed"
+                          : "✗ Call failed"}
+                  </strong>
+                  {callRecord.decision?.action === "human-approval" && (
+                    <span className="escalation-flag">
+                      ⬆ Escalated for human approval
+                    </span>
+                  )}
+                </div>
+              )}
             </section>
           )}
 
@@ -770,6 +1115,19 @@ export function KaroboliApp() {
                       : "× REJECTED"}
                 </span>
               </header>
+
+              {decision.action === "human-approval" && (
+                <div className="human-approval-banner" role="alert">
+                  <strong>⬆ Human approval required</strong>
+                  <span>
+                    This offer exceeds the autonomous ceiling or has unresolved conditions. A
+                    procurement manager must review and approve before an order is placed.
+                  </span>
+                  <small>
+                    Reasons: {decision.reasons.join(" · ")}
+                  </small>
+                </div>
+              )}
 
               <div className="decision-grid">
                 <div className="policy-panel">
@@ -883,6 +1241,14 @@ export function KaroboliApp() {
                   </p>
                 </div>
               )}
+
+              <DealRoom
+                requirement={requirement}
+                offer={offer}
+                decision={decision}
+                evidence={evidence}
+                supplierName={selectedSupplier}
+              />
 
               <div className="stage-actions final-actions">
                 <button className="secondary-button" onClick={reset}>

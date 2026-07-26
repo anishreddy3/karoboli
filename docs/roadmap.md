@@ -13,6 +13,9 @@
 
 ## Milestone 2 — Agent depth
 
+Status: implemented on `codex/milestone-2-agent-depth`; live account validation
+awaits the provisioned organization, workspace, and committed Samvaad app ID.
+
 - Add a Python realtime gateway using the documented
   `sarvam-conv-ai-sdk` and `AsyncSamvaadAgent`.
 - Connect the browser to that gateway for streamed PCM audio, text, and events.
@@ -51,6 +54,10 @@ configuration a critical dependency.
 
 ## Milestone 5 — Production procurement
 
+- Server-enforced buyer and supplier views over one negotiation room per RFQ.
+- Supplier links expose only the shared requirement, that supplier's offer and
+  the final outcome; buyer budgets, competing offers and policy reasons remain
+  private.
 - Tenant-specific policies and human approval queues.
 - Verified supplier directory and consent controls.
 - Sarvam campaigns and cohorts for scheduled or parallel supplier calling,
@@ -58,6 +65,10 @@ configuration a critical dependency.
 - ERP/PO integration through idempotent adapters.
 - Retention, encryption, access control, redaction, and audit export.
 - Usage-based billing after real call-cost measurements.
+
+Commercial packaging, bottom-up market assumptions and the buildathon Q&A
+answer are documented in
+[deal rooms, pricing and monetization](./deal-room-and-monetization.md).
 
 ## Milestone branches
 

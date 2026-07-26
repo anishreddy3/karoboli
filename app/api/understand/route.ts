@@ -4,7 +4,9 @@ import {
   languageSchema,
   supplierOfferSchema,
 } from "@/lib/domain";
+import { reconcileBuyerRequirement } from "@/lib/requirement-reconciliation";
 import { providerErrorResponse, sarvamFetch } from "@/lib/sarvam-server";
+import { reconcileSupplierOffer } from "@/lib/supplier-reconciliation";
 
 export const runtime = "edge";
 
@@ -13,6 +15,7 @@ const requestSchema = z.discriminatedUnion("kind", [
     kind: z.literal("buyer"),
     transcript: z.string().min(2).max(4000),
     language: z.union([languageSchema, z.literal("unknown")]).default("unknown"),
+    existingRequirement: buyerRequirementSchema.optional(),
   }),
   z.object({
     kind: z.literal("supplier"),
@@ -20,123 +23,11 @@ const requestSchema = z.discriminatedUnion("kind", [
     language: languageSchema.default("hi-IN"),
     supplierName: z.string().min(1).max(120),
     buyerRequirement: buyerRequirementSchema,
+    existingOffer: supplierOfferSchema.optional(),
   }),
 ]);
 
 const paymentTerms = ["advance", "delivery", "net-7", "net-15", "net-30"] as const;
-const buyerFieldNames = [
-  "product",
-  "specification",
-  "quantity",
-  "unit",
-  "deliveryLocation",
-  "requiredBy",
-  "maximumBudget",
-  "preferredPaymentTerm",
-] as const;
-
-function dateFromSpokenMonth(transcript: string): string | null {
-  const monthNumbers: Record<string, number> = {
-    january: 1,
-    february: 2,
-    march: 3,
-    april: 4,
-    may: 5,
-    june: 6,
-    july: 7,
-    august: 8,
-    september: 9,
-    october: 10,
-    november: 11,
-    december: 12,
-  };
-  const monthFirst = transcript.match(
-    /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})\b/i,
-  );
-  const dayFirst = transcript.match(
-    /\b(\d{1,2})\s+(january|february|march|april|may|june|july|august|september|october|november|december)\b/i,
-  );
-  const monthName = monthFirst?.[1] || dayFirst?.[2];
-  const dayText = monthFirst?.[2] || dayFirst?.[1];
-  if (!monthName || !dayText) return null;
-
-  const month = monthNumbers[monthName.toLowerCase()];
-  const day = Number(dayText);
-  if (!month || day < 1 || day > 31) return null;
-
-  const today = new Date("2026-07-26T00:00:00Z");
-  let year = today.getUTCFullYear();
-  const candidate = new Date(Date.UTC(year, month - 1, day));
-  if (candidate.getTime() < today.getTime()) year += 1;
-  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function dateIsPlausible(value: string): boolean {
-  if (value === "unknown") return false;
-  const date = new Date(`${value}T00:00:00Z`);
-  const earliest = new Date("2026-07-26T00:00:00Z").getTime();
-  const latest = new Date("2027-07-26T00:00:00Z").getTime();
-  return (
-    !Number.isNaN(date.getTime()) &&
-    date.getTime() >= earliest &&
-    date.getTime() <= latest
-  );
-}
-
-function paymentTermFromTranscript(
-  transcript: string,
-): (typeof paymentTerms)[number] | null {
-  const normalized = transcript.toLowerCase();
-  if (
-    /\b(?:payment|pay|paid|cash)\b.{0,24}\b(?:on|upon|at)\s+delivery\b/.test(
-      normalized,
-    )
-  ) {
-    return "delivery";
-  }
-  if (/\badvance(?:\s+payment)?\b|\bpayment\s+in\s+advance\b/.test(normalized)) {
-    return "advance";
-  }
-  const netTerm = normalized.match(/\bnet[\s-]?(7|15|30)\b/);
-  return netTerm ? (`net-${netTerm[1]}` as (typeof paymentTerms)[number]) : null;
-}
-
-function reconcileBuyerRequirement(
-  raw: unknown,
-  transcript: string,
-) {
-  const requirement = buyerRequirementSchema.parse(raw);
-  if (!dateIsPlausible(requirement.requiredBy)) {
-    requirement.requiredBy = dateFromSpokenMonth(transcript) || "unknown";
-  }
-  if (requirement.preferredPaymentTerm === "unknown") {
-    requirement.preferredPaymentTerm =
-      paymentTermFromTranscript(transcript) || "unknown";
-  }
-
-  const missing = new Set<(typeof buyerFieldNames)[number]>();
-  if (requirement.product.toLowerCase() === "unknown") missing.add("product");
-  if (requirement.specification.toLowerCase() === "unknown") {
-    missing.add("specification");
-  }
-  if (requirement.quantity <= 0) missing.add("quantity");
-  if (requirement.unit.toLowerCase() === "unknown") missing.add("unit");
-  if (requirement.deliveryLocation.toLowerCase() === "unknown") {
-    missing.add("deliveryLocation");
-  }
-  if (!dateIsPlausible(requirement.requiredBy)) missing.add("requiredBy");
-  if (requirement.maximumBudget <= 0) missing.add("maximumBudget");
-  if (requirement.preferredPaymentTerm === "unknown") {
-    missing.add("preferredPaymentTerm");
-  }
-
-  requirement.missingFields = buyerFieldNames.filter((field) =>
-    missing.has(field),
-  );
-  requirement.needsConfirmation = requirement.missingFields.length > 0;
-  return requirement;
-}
-
 const buyerJsonSchema = {
   name: "buyer_requirement",
   strict: true,
@@ -219,14 +110,14 @@ const supplierJsonSchema = {
     ],
     properties: {
       supplierName: { type: "string" },
-      totalPrice: { type: "number" },
+      totalPrice: { type: "number", minimum: 0 },
       unitPrice: { type: ["number", "null"] },
       deliveryDate: {
         type: "string",
-        pattern: "^\\d{4}-\\d{2}-\\d{2}$",
-        description: "ISO date, YYYY-MM-DD. Convert spoken dates using 2026-07-26 as today.",
+        pattern: "^(?:\\d{4}-\\d{2}-\\d{2}|unknown)$",
+        description: "ISO date, YYYY-MM-DD. Convert spoken dates using 2026-07-26 as today. Use unknown when absent.",
       },
-      paymentTerm: { type: "string", enum: paymentTerms },
+      paymentTerm: { type: "string", enum: [...paymentTerms, "unknown"] },
       freightIncluded: { type: "boolean" },
       unloadingIncluded: { type: "boolean" },
       gstIncluded: { type: "boolean" },
@@ -325,12 +216,20 @@ export async function POST(request: Request) {
           "An area or site name is a sufficient deliveryLocation. A stated payment timing such as payment on delivery is a sufficient preferredPaymentTerm.",
           "Never invent missing facts. For an absent numeric field use 0; for an absent date or payment term use 'unknown'; for another absent string field use 'unknown'. List every absent or ambiguous allowed field in missingFields and set needsConfirmation true.",
           "If missingFields is empty, needsConfirmation must be false.",
+          "When an existing requirement is supplied, merge the new answer into it. Preserve every existing fact unless the speaker explicitly corrects it.",
           "Convert spoken dates to ISO dates. normalizedSummary must be concise English.",
         ].join(" "),
-        parsed.data.transcript,
+        JSON.stringify({
+          existingRequirement: parsed.data.existingRequirement || null,
+          latestTranscript: parsed.data.transcript,
+        }),
       );
       return Response.json({
-        requirement: reconcileBuyerRequirement(data, parsed.data.transcript),
+        requirement: reconcileBuyerRequirement(
+          data,
+          parsed.data.transcript,
+          parsed.data.existingRequirement,
+        ),
       });
     }
 
@@ -342,22 +241,32 @@ export async function POST(request: Request) {
         "Self-corrections are critical: when the speaker says one value and corrects it, use only the final value and include the before, after, and exact short evidence phrase in corrections.",
         "Correction before and after must be numeric amounts such as 40800 and 40200, while evidence keeps the speaker's exact wording.",
         "Do not infer freight, unloading, GST, payment terms, or dates unless explicitly stated.",
+        "The buyer requirement is context only. Never copy its payment term, budget, date, or other values into the supplier offer.",
+        "Do not calculate a unit price from quantity and total. unitPrice must be null unless the supplier explicitly states a per-unit rate.",
+        "Never create a correction unless the supplier states both the earlier and corrected values with correction language.",
         "Every explicitly stated price, freight, unloading, GST, delivery, and payment promise must appear as a separate item in commitments.",
         "Put absent or ambiguous commercial facts in unresolvedQuestions and set needsConfirmation true.",
+        "For an absent total price use 0. For an absent delivery date or payment term use 'unknown'.",
+        "When an existing offer is supplied, merge the latest answer into it. Preserve every existing fact unless the supplier explicitly corrects it.",
         "normalizedSummary must summarize the supplier's final offer, not restate the buyer requirement.",
         "Never claim that an order is placed.",
       ].join(" "),
       JSON.stringify({
         supplierName: parsed.data.supplierName,
         buyerRequirement: parsed.data.buyerRequirement,
+        existingOffer: parsed.data.existingOffer || null,
         transcript: parsed.data.transcript,
       }),
     );
     return Response.json({
-      offer: supplierOfferSchema.parse({
-        ...data,
-        supplierName: parsed.data.supplierName,
-      }),
+      offer: reconcileSupplierOffer(
+        {
+          ...data,
+          supplierName: parsed.data.supplierName,
+        },
+        parsed.data.transcript,
+        parsed.data.existingOffer,
+      ),
     });
   } catch (error) {
     return providerErrorResponse(error);
