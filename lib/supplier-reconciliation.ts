@@ -109,9 +109,11 @@ export function reconcileSupplierOffer(
           candidate.after === correction.after,
       ) === index,
   );
+  const finalVerifiedCorrection = corrections.at(-1);
 
   const offer = supplierOfferSchema.parse({
     ...parsed,
+    totalPrice: finalVerifiedCorrection?.after ?? parsed.totalPrice,
     unitPrice: mentionsUnitPrice
       ? parsed.unitPrice
       : existing?.unitPrice || null,

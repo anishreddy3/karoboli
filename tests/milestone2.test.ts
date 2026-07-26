@@ -159,3 +159,32 @@ test("three unseen language cases retain a verified Hinglish correction", () => 
     );
   }
 });
+
+test("verified supplier correction deterministically becomes the final total", () => {
+  const offer = reconcileSupplierOffer(
+    {
+      supplierName: "Correction test supplier",
+      totalPrice: 40_800,
+      unitPrice: null,
+      deliveryDate: "2026-07-28",
+      paymentTerm: "delivery",
+      freightIncluded: true,
+      unloadingIncluded: true,
+      gstIncluded: true,
+      commitments: ["Final corrected total is ₹40,200"],
+      corrections: [
+        {
+          before: 40_800,
+          after: 40_200,
+          evidence: "40800, nahi correction 40200",
+        },
+      ],
+      unresolvedQuestions: [],
+      normalizedSummary: "Corrected supplier offer",
+      needsConfirmation: false,
+    },
+    "Total 40800, nahi correction 40200. Freight, unloading and GST included. Delivery July 28, payment on delivery.",
+  );
+
+  assert.equal(offer.totalPrice, 40_200);
+});

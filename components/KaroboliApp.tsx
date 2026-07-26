@@ -428,7 +428,9 @@ export function KaroboliApp() {
         kind: "buyer",
         transcript,
         language,
-        existingRequirement: requirementRef.current,
+        ...(requirementRef.current
+          ? { existingRequirement: requirementRef.current }
+          : {}),
       }),
     });
     if (!response.ok) throw new Error(await readError(response));
@@ -458,7 +460,7 @@ export function KaroboliApp() {
         language: "hi-IN",
         supplierName: selectedSupplier,
         buyerRequirement: activeRequirement,
-        existingOffer: offerRef.current,
+        ...(offerRef.current ? { existingOffer: offerRef.current } : {}),
       }),
     });
     if (!response.ok) throw new Error(await readError(response));

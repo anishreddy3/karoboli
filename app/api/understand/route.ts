@@ -10,12 +10,12 @@ import { reconcileSupplierOffer } from "@/lib/supplier-reconciliation";
 
 export const runtime = "edge";
 
-const requestSchema = z.discriminatedUnion("kind", [
+export const understandingRequestSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("buyer"),
     transcript: z.string().min(2).max(4000),
     language: z.union([languageSchema, z.literal("unknown")]).default("unknown"),
-    existingRequirement: buyerRequirementSchema.optional(),
+    existingRequirement: buyerRequirementSchema.nullish(),
   }),
   z.object({
     kind: z.literal("supplier"),
@@ -23,7 +23,7 @@ const requestSchema = z.discriminatedUnion("kind", [
     language: languageSchema.default("hi-IN"),
     supplierName: z.string().min(1).max(120),
     buyerRequirement: buyerRequirementSchema,
-    existingOffer: supplierOfferSchema.optional(),
+    existingOffer: supplierOfferSchema.nullish(),
   }),
 ]);
 
@@ -197,8 +197,17 @@ async function structuredCompletion(
 }
 
 export async function POST(request: Request) {
-  const parsed = requestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = understandingRequestSchema.safeParse(
+    await request.json().catch(() => null),
+  );
   if (!parsed.success) {
+    console.warn(
+      "Invalid understanding request",
+      parsed.error.issues.map((issue) => ({
+        path: issue.path.join("."),
+        code: issue.code,
+      })),
+    );
     return Response.json({ error: "Invalid understanding request." }, { status: 400 });
   }
 
