@@ -389,7 +389,14 @@ export function KaroboliApp() {
     setFallbackUsed(false);
   }
 
-  const guardrails = requirement ? buildGuardrails(requirement) : null;
+  const requirementReady =
+    requirement !== null &&
+    !requirement.needsConfirmation &&
+    requirement.quantity > 0 &&
+    requirement.maximumBudget > 0 &&
+    requirement.requiredBy !== "unknown" &&
+    requirement.preferredPaymentTerm !== "unknown";
+  const guardrails = requirementReady ? buildGuardrails(requirement) : null;
   const stepNumber = stage === "brief" ? 1 : stage === "supplier" ? 2 : 3;
 
   return (

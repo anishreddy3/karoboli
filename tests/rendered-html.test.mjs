@@ -49,4 +49,9 @@ test("keeps deterministic authority separate from Sarvam extraction", async () =
   assert.match(policy, /human-approval/);
   assert.doesNotMatch(understandingRoute, /auto-accept|createPurchaseOrder/);
   assert.match(component, /Disclosed fallback case/);
+  assert.match(component, /const requirementReady/);
+  assert.match(
+    component,
+    /const guardrails = requirementReady \? buildGuardrails\(requirement\) : null/,
+  );
 });
