@@ -1,4 +1,4 @@
-import type { Tenant, TenantPolicy, DEFAULT_POLICY } from "../lib/tenant.ts";
+import type { Tenant } from "../lib/tenant.ts";
 import { DEFAULT_POLICY as _DEFAULT } from "../lib/tenant.ts";
 
 const store = new Map<string, Tenant>();

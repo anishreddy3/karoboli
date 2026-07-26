@@ -14,10 +14,13 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as any;
+  const body = (await request.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
   const tenantId = process.env.KAROBOLI_TENANT_ID || "default";
 
-  if (!body.name || !body.requirement) {
+  if (typeof body.name !== "string" || !body.name.trim() || !body.requirement) {
     return Response.json({ error: "Missing name or requirement" }, { status: 400 });
   }
 

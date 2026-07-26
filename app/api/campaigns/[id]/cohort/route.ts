@@ -14,7 +14,9 @@ export async function POST(
     return Response.json({ error: "Campaign not found" }, { status: 404 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as { rows?: any[] };
+  const body = (await request.json().catch(() => ({}))) as {
+    rows?: unknown[];
+  };
   if (!Array.isArray(body.rows)) {
     return Response.json({ error: "rows array is required" }, { status: 400 });
   }
@@ -22,8 +24,18 @@ export async function POST(
   const rows: CohortRow[] = [];
   const warnings: string[] = [];
 
-  for (const [index, row] of body.rows.entries()) {
-    if (!row.supplierName || !row.supplierPhone) {
+  for (const [index, value] of body.rows.entries()) {
+    if (!value || typeof value !== "object") {
+      warnings.push(`Row ${index} is not an object`);
+      continue;
+    }
+    const row = value as Record<string, unknown>;
+    if (
+      typeof row.supplierName !== "string" ||
+      typeof row.supplierPhone !== "string" ||
+      !row.supplierName.trim() ||
+      !row.supplierPhone.trim()
+    ) {
       warnings.push(`Row ${index} is missing supplierName or supplierPhone`);
       continue;
     }
@@ -31,8 +43,8 @@ export async function POST(
     // but warn and NOT block if not found. We skip the strict lookup for this prototype
     // or simulate it by just accepting the row.
     rows.push({
-      supplierName: String(row.supplierName),
-      supplierPhone: String(row.supplierPhone),
+      supplierName: row.supplierName,
+      supplierPhone: row.supplierPhone,
     });
   }
 

@@ -57,8 +57,9 @@ export async function POST(request: Request) {
     supplierPhone: String(body.supplier_phone ?? "Unknown"),
     outcome: (body.outcome as CampaignAttempt["outcome"]) || null,
     callId: String(body.call_id ?? "") || null,
-    decision: (body.decision as any) || null,
-    purchaseOrder: (body.purchase_order as any) || null,
+    decision: (body.decision as CampaignAttempt["decision"]) || null,
+    purchaseOrder:
+      (body.purchase_order as CampaignAttempt["purchaseOrder"]) || null,
     startedAt: null,
     endedAt: new Date().toISOString(),
   };

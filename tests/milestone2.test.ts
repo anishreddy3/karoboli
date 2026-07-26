@@ -3,7 +3,10 @@ import test from "node:test";
 import type { BuyerRequirement, SupplierOffer } from "../lib/domain";
 import { nextBuyerQuestion, nextSupplierQuestion } from "../lib/follow-up";
 import { evaluateOffer, buildGuardrails } from "../lib/policy";
-import { reconcileBuyerRequirement } from "../lib/requirement-reconciliation";
+import {
+  dateFromSpokenMonth,
+  reconcileBuyerRequirement,
+} from "../lib/requirement-reconciliation";
 import { reconcileSupplierOffer } from "../lib/supplier-reconciliation";
 
 const baseRequirement: BuyerRequirement = {
@@ -157,5 +160,51 @@ test("three unseen language cases retain a verified Hinglish correction", () => 
       evaluateOffer(offer, buildGuardrails(baseRequirement)).action,
       "auto-accept",
     );
+  }
+});
+
+test("verified supplier correction deterministically becomes the final total", () => {
+  const offer = reconcileSupplierOffer(
+    {
+      supplierName: "Correction test supplier",
+      totalPrice: 40_800,
+      unitPrice: null,
+      deliveryDate: "2026-07-28",
+      paymentTerm: "delivery",
+      freightIncluded: true,
+      unloadingIncluded: true,
+      gstIncluded: true,
+      commitments: ["Final corrected total is ₹40,200"],
+      corrections: [
+        {
+          before: 40_800,
+          after: 40_200,
+          evidence: "40800, nahi correction 40200",
+        },
+      ],
+      unresolvedQuestions: [],
+      normalizedSummary: "Corrected supplier offer",
+      needsConfirmation: false,
+    },
+    "Total 40800, nahi correction 40200. Freight, unloading and GST included. Delivery July 28, payment on delivery.",
+  );
+
+  assert.equal(offer.totalPrice, 40_200);
+});
+
+test("deadline parser understands multilingual and relative date phrases", () => {
+  const cases = [
+    ["జూలై 29 లోపు డెలివరీ కావాలి", "2026-07-29"],
+    ["ஜூலை 29 க்குள் டெலிவரி வேண்டும்", "2026-07-29"],
+    ["29 जुलाई तक डिलीवरी चाहिए", "2026-07-29"],
+    ["Deliver by July twenty ninth", "2026-07-29"],
+    ["Delivery tomorrow", "2026-07-27"],
+    ["Delivery day after tomorrow", "2026-07-28"],
+    ["3 రోజుల్లో డెలివరీ కావాలి", "2026-07-29"],
+    ["Deliver by 29/07/2026", "2026-07-29"],
+  ] as const;
+
+  for (const [spoken, expected] of cases) {
+    assert.equal(dateFromSpokenMonth(spoken), expected, spoken);
   }
 });

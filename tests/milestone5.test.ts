@@ -8,8 +8,8 @@ import { upsertCampaign, getCampaign, upsertAttempt } from "../db/campaigns.ts";
 import { appendEvent, queryEvents, _clearEvents } from "../db/audit.ts";
 import { redactEvent, formatNdjson } from "../lib/audit.ts";
 import { computeAnalytics } from "../lib/campaign.ts";
+import { fallbackRequirement } from "../lib/fixtures.ts";
 import type { TenantPolicy } from "../lib/tenant.ts";
-import type { PurchaseOrder } from "../lib/domain.ts";
 import type { CampaignAttempt } from "../lib/campaign.ts";
 
 test("tenant default provisioning and policy override", () => {
@@ -88,7 +88,7 @@ test("campaign analytics computation and attempt tracking", () => {
     status: "running",
     concurrency: 5,
     maxRetries: 1,
-    requirement: {} as any, // Mock
+    requirement: fallbackRequirement,
     cohort: [],
     attempts: [],
     createdAt: new Date().toISOString(),
