@@ -51,6 +51,7 @@ test("server-renders the Karoboli live demo shell", async () => {
   assert.match(html, /A buyer speaks/);
   assert.match(html, /What do you need/);
   assert.match(html, /Use disclosed fallback/);
+  assert.match(html, /Start new case/);
   assert.match(html, /Never hide uncertainty/);
   assert.doesNotMatch(html, /Your site is taking shape/);
 });

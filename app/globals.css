@@ -789,6 +789,35 @@ button {
   font-size: 9px;
 }
 
+.case-memory-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.case-memory-actions button {
+  padding: 5px 8px;
+  border: 1px solid #b9cec3;
+  border-radius: 4px;
+  background: white;
+  color: var(--green);
+  cursor: pointer;
+  font-size: 8px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.case-memory-actions button:hover:not(:disabled) {
+  border-color: var(--green);
+  background: #e9f7ef;
+}
+
+.case-memory-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .case-memory-bar.loading i,
 .case-memory-bar.saving i {
   animation: pulse-memory 1s ease-in-out infinite alternate;
@@ -1707,6 +1736,12 @@ button {
     align-items: flex-start;
     flex-direction: column;
     padding: 10px 20px;
+  }
+
+  .case-memory-actions {
+    width: 100%;
+    align-items: flex-start;
+    justify-content: space-between;
   }
 
   .hero {

@@ -93,7 +93,8 @@ buys.”
 
 ## Demo operator checklist
 
-- Start on a fresh case and confirm **Samvaad ready**.
+- Click **Start new case**, confirm the buyer brief is empty, and check
+  **Samvaad ready**.
 - Keep **Composed fallback** available even when using live Samvaad.
 - Use headphones or moderate speaker volume to avoid microphone feedback.
 - Stop the seller brief after one sentence; this proves interruption and saves

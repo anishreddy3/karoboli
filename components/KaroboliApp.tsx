@@ -329,6 +329,7 @@ export function KaroboliApp() {
   const [handoffPending, setHandoffPending] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const discardRecordingRef = useRef(false);
   const targetRef = useRef<RecordingTarget>("buyer");
   const briefAudioRef = useRef<HTMLAudioElement | null>(null);
   const briefAudioUrlRef = useRef<string | null>(null);
@@ -499,11 +500,19 @@ export function KaroboliApp() {
         ? new MediaRecorder(stream, { mimeType: preferredMimeType })
         : new MediaRecorder(stream);
       recorderRef.current = recorder;
+      discardRecordingRef.current = false;
       recorder.ondataavailable = (event) => {
         if (event.data.size) chunksRef.current.push(event.data);
       };
       recorder.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop());
+        recorderRef.current = null;
+        if (discardRecordingRef.current) {
+          discardRecordingRef.current = false;
+          chunksRef.current = [];
+          setBusy(null);
+          return;
+        }
         try {
           const recordedAudio = new Blob(chunksRef.current, {
             type: recorder.mimeType || "audio/webm",
@@ -903,6 +912,14 @@ export function KaroboliApp() {
   function reset() {
     const previousCaseId = caseId;
     const nextCaseId = crypto.randomUUID();
+    stopAgentBrief();
+    if (recorderRef.current?.state !== "inactive") {
+      discardRecordingRef.current = true;
+      recorderRef.current?.stop();
+    }
+    recorderRef.current = null;
+    chunksRef.current = [];
+    setRecording(null);
     window.localStorage.setItem(CASE_ID_STORAGE_KEY, nextCaseId);
     setCaseId(nextCaseId);
     setMemoryStatus("new");
@@ -913,11 +930,13 @@ export function KaroboliApp() {
     }
     void stopLiveAgent();
     setStage("brief");
+    setLanguage("unknown");
     setBuyerTranscript("");
     setBuyerEnglishTranscript("");
     setSupplierTranscript("");
     setSupplierEnglishTranscript("");
     setSellerBriefLanguage("en-IN");
+    setSelectedSupplier(suppliers[0].name);
     setRequirement(null);
     setOffer(null);
     setDecision(null);
@@ -1092,20 +1111,30 @@ export function KaroboliApp() {
               <i />
               CLOUDFLARE D1 CASE MEMORY
             </span>
-            <small>
-              {memoryStatus === "loading"
-                ? "Finding your active case…"
-                : memoryStatus === "restored"
-                  ? "Case restored across sessions"
-                  : memoryStatus === "saving"
-                    ? "Saving buyer and supplier context…"
-                    : memoryStatus === "saved"
-                      ? "Buyer brief, offer and commitments saved"
-                      : memoryStatus === "unavailable"
-                        ? "Memory unavailable · live workflow still works"
-                        : "New private case"}
-              {caseId ? ` · ${caseId.slice(0, 8).toUpperCase()}` : ""}
-            </small>
+            <div className="case-memory-actions">
+              <small>
+                {memoryStatus === "loading"
+                  ? "Finding your active case…"
+                  : memoryStatus === "restored"
+                    ? "Case restored across sessions"
+                    : memoryStatus === "saving"
+                      ? "Saving buyer and supplier context…"
+                      : memoryStatus === "saved"
+                        ? "Buyer brief, offer and commitments saved"
+                        : memoryStatus === "unavailable"
+                          ? "Memory unavailable · live workflow still works"
+                          : "New private case"}
+                {caseId ? ` · ${caseId.slice(0, 8).toUpperCase()}` : ""}
+              </small>
+              <button
+                type="button"
+                onClick={reset}
+                disabled={!memoryReady}
+                title="Delete this saved case and return to an empty buyer brief"
+              >
+                Start new case
+              </button>
+            </div>
           </div>
           {realtimeAvailable && (
             <div className="provider-switch" aria-label="Voice provider">
