@@ -11,9 +11,11 @@ Bengaluru.
 
 ## The live proof
 
-1. A buyer speaks in Telugu, Tamil, Hindi, or English.
-2. Sarvam Saaras v3 transcribes code-mixed speech.
-3. Sarvam-30B extracts exact procurement facts without silently filling gaps.
+1. A buyer speaks in any supported language.
+2. When provisioned, a Samvaad agent streams speech, text, and interruption
+   events through Karoboli's credential-safe gateway.
+3. The composed Saaras v3 + Sarvam-30B path remains available as a disclosed
+   provider fallback.
 4. A supplier replies in Hindi/Hinglish and self-corrects a commercial term.
 5. Karoboli preserves the correction and verbal commitments.
 6. A deterministic policy engine—not an LLM—accepts, escalates, or rejects.
@@ -42,6 +44,16 @@ SARVAM_API_KEY=your_key_here
 Open [http://localhost:3000](http://localhost:3000). If that port is occupied,
 the terminal will show the next available port.
 
+### Optional Samvaad streaming
+
+The streaming path requires a committed Samvaad app plus organization and
+workspace IDs. Follow [the gateway setup](./gateway/README.md), run it on port
+8788, and add the gateway URL and matching session secret to `.env.local`.
+Use `SARVAM_AGENT_API_KEY` when the Agents runtime key differs from the public
+speech API key.
+Karoboli automatically enables the streaming/composed provider switch when the
+gateway is configured.
+
 ## Commands
 
 ```bash
@@ -55,11 +67,10 @@ npm test
 
 ```text
 Browser microphone
-  → Saaras v3 (codemix STT)
-  → Sarvam-30B (schema-constrained extraction)
+  ├─ Samvaad streaming gateway → committed agent app
+  └─ composed fallback → Saaras v3 → Sarvam-30B → Bulbul v3
   → deterministic policy engine
   → PO + tamper-evident evidence record
-  → Bulbul v3 (supplier-facing voice)
 ```
 
 Sarvam Voice Experience is the primary buildathon parameter. Content and Doc
@@ -67,7 +78,10 @@ Agents are deliberately supporting capabilities; adding more APIs is not the
 goal unless they make the live procurement loop more convincing.
 
 See [IDEA_SCOPE.md](./IDEA_SCOPE.md), [the demo script](./docs/demo-script.md),
-and [the implementation roadmap](./docs/roadmap.md).
+[the Milestone 2 implementation notes](./docs/milestone-2.md), and
+[the implementation roadmap](./docs/roadmap.md). Product access boundaries,
+pricing and the bottom-up market model live in
+[deal rooms, pricing and monetization](./docs/deal-room-and-monetization.md).
 
 ## Safety and prototype status
 
@@ -76,4 +90,3 @@ and [the implementation roadmap](./docs/roadmap.md).
 - Hard budget, deadline, payment, and freight rules are deterministic.
 - Human approval is required above the autonomy ceiling.
 - Secrets stay in ignored `.env*` files.
-

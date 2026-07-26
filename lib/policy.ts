@@ -41,13 +41,25 @@ export function evaluateOffer(
   offer: SupplierOffer,
   guardrails: Guardrails,
 ): Decision {
-  const budgetOkay = offer.totalPrice <= guardrails.absoluteBudget;
-  const autonomousOkay = offer.totalPrice <= guardrails.autonomousCeiling;
+  const priceKnown = offer.totalPrice > 0;
+  const deliveryKnown = offer.deliveryDate !== "unknown";
+  const paymentKnown = offer.paymentTerm !== "unknown";
+  const budgetOkay = priceKnown && offer.totalPrice <= guardrails.absoluteBudget;
+  const autonomousOkay =
+    priceKnown && offer.totalPrice <= guardrails.autonomousCeiling;
   const deliveryOkay =
+    deliveryKnown &&
     dateAtMidnight(offer.deliveryDate) <= dateAtMidnight(guardrails.requiredBy);
-  const paymentOkay = guardrails.allowedPaymentTerms.includes(offer.paymentTerm);
+  const paymentOkay =
+    offer.paymentTerm !== "unknown" &&
+    guardrails.allowedPaymentTerms.includes(offer.paymentTerm);
   const freightOkay = !guardrails.requireFreightIncluded || offer.freightIncluded;
-  const complete = offer.unresolvedQuestions.length === 0 && !offer.needsConfirmation;
+  const complete =
+    priceKnown &&
+    deliveryKnown &&
+    paymentKnown &&
+    offer.unresolvedQuestions.length === 0 &&
+    !offer.needsConfirmation;
 
   const checks = [
     {
@@ -84,6 +96,14 @@ export function evaluateOffer(
     },
   ];
 
+  if (!complete) {
+    return {
+      action: "human-approval",
+      reasons: ["Offer has unresolved commercial facts"],
+      checks,
+    };
+  }
+
   if (!budgetOkay || !deliveryOkay || !paymentOkay || !freightOkay) {
     return {
       action: "reject",
@@ -115,7 +135,13 @@ export function createPurchaseOrder(
   offer: SupplierOffer,
   decision: Decision,
 ): PurchaseOrder | null {
-  if (decision.action === "reject") return null;
+  if (
+    decision.action === "reject" ||
+    offer.deliveryDate === "unknown" ||
+    offer.paymentTerm === "unknown"
+  ) {
+    return null;
+  }
 
   return {
     id: `KBL-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${Math.floor(

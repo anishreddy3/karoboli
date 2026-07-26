@@ -23,6 +23,24 @@ async function render() {
   );
 }
 
+async function requestApp(path, init) {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}-${path}`);
+  const { default: worker } = await import(workerUrl.href);
+  return worker.fetch(
+    new Request(`http://localhost${path}`, init),
+    {
+      ASSETS: {
+        fetch: async () => new Response("Not found", { status: 404 }),
+      },
+    },
+    {
+      waitUntil() {},
+      passThroughOnException() {},
+    },
+  );
+}
+
 test("server-renders the Karoboli live demo shell", async () => {
   const response = await render();
   assert.equal(response.status, 200);
@@ -54,4 +72,17 @@ test("keeps deterministic authority separate from Sarvam extraction", async () =
     component,
     /const guardrails = requirementReady \? buildGuardrails\(requirement\) : null/,
   );
+});
+
+test("keeps agent sessions and deterministic tools closed without secrets", async () => {
+  const [session, tool] = await Promise.all([
+    requestApp("/api/agent/session", { method: "POST" }),
+    requestApp("/api/agent-tools/next-question", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    }),
+  ]);
+  assert.equal(session.status, 503);
+  assert.equal(tool.status, 503);
 });
