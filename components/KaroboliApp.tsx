@@ -37,6 +37,11 @@ import {
   safeStageForMemory,
   type StoredCaseMemory,
 } from "@/lib/case-memory";
+import {
+  appendUniqueTranscript,
+  normalizeTranscript,
+  replaceStreamingTranscript,
+} from "@/lib/transcript";
 import { DealRoom } from "./DealRoom";
 
 type Stage = "brief" | "supplier" | "decision";
@@ -143,32 +148,6 @@ const speechLanguageLabels: Record<SpeechLanguage, string> = {
   "ta-IN": "Tamil",
   "te-IN": "Telugu",
 };
-
-function normalizeTranscript(value: string) {
-  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
-}
-
-function appendUniqueTranscript(current: string, next: string) {
-  const cleanNext = next.trim();
-  if (!cleanNext) return current;
-  if (!current.trim()) return cleanNext;
-
-  const lines = current.split("\n").filter((line) => line.trim());
-  const last = lines.at(-1) || "";
-  const normalizedNext = normalizeTranscript(cleanNext);
-  const normalizedLast = normalizeTranscript(last);
-
-  if (
-    lines.some((line) => normalizeTranscript(line) === normalizedNext) ||
-    normalizedLast.startsWith(normalizedNext)
-  ) {
-    return current;
-  }
-  if (normalizedNext.startsWith(normalizedLast)) {
-    return [...lines.slice(0, -1), cleanNext].join("\n");
-  }
-  return `${current}\n${cleanNext}`;
-}
 
 function TranscriptPair({
   original,
@@ -339,8 +318,38 @@ export function KaroboliApp() {
   const offerRef = useRef<SupplierOffer | null>(null);
   const buyerUnderstandQueueRef = useRef<Promise<void>>(Promise.resolve());
   const supplierUnderstandQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const liveTranscriptSegmentRef = useRef<Record<RecordingTarget, string>>({
+    buyer: "",
+    supplier: "",
+  });
+  const liveEnglishSegmentRef = useRef<Record<RecordingTarget, string>>({
+    buyer: "",
+    supplier: "",
+  });
+  const liveTranscriptAtRef = useRef<Record<RecordingTarget, number>>({
+    buyer: 0,
+    supplier: 0,
+  });
+  const liveTranslationGenerationRef = useRef<Record<RecordingTarget, number>>({
+    buyer: 0,
+    supplier: 0,
+  });
+  const liveTranslationTimerRef = useRef<
+    Record<RecordingTarget, ReturnType<typeof setTimeout> | null>
+  >({
+    buyer: null,
+    supplier: null,
+  });
+  const liveUnderstandTimerRef = useRef<
+    Record<RecordingTarget, ReturnType<typeof setTimeout> | null>
+  >({
+    buyer: null,
+    supplier: null,
+  });
 
   useEffect(() => {
+    const translationTimers = liveTranslationTimerRef.current;
+    const understandTimers = liveUnderstandTimerRef.current;
     fetch("/api/capabilities")
       .then((response) => response.json())
       .then((data: { sarvam?: boolean; samvaadRealtime?: boolean; telephonyConfigured?: boolean }) => {
@@ -354,6 +363,12 @@ export function KaroboliApp() {
     return () => {
       void liveSessionRef.current?.stop();
       stopAgentBrief();
+      for (const timer of Object.values(translationTimers)) {
+        if (timer) clearTimeout(timer);
+      }
+      for (const timer of Object.values(understandTimers)) {
+        if (timer) clearTimeout(timer);
+      }
       if (callPollRef.current) clearInterval(callPollRef.current);
     };
   }, []);
@@ -676,32 +691,101 @@ export function KaroboliApp() {
     transcript: string,
     target: RecordingTarget,
   ) {
+    const generation = ++liveTranslationGenerationRef.current[target];
     try {
+      const sourceLanguage =
+        target === "buyer"
+          ? language === "unknown"
+            ? "auto"
+            : language
+          : sellerBriefLanguage;
       const response = await fetch("/api/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: transcript }),
+        body: JSON.stringify({ text: transcript, sourceLanguage }),
       });
       if (!response.ok) return;
       const data = (await response.json()) as { translation?: string };
+      if (generation !== liveTranslationGenerationRef.current[target]) return;
       if (
         !data.translation ||
         normalizeTranscript(data.translation) === normalizeTranscript(transcript)
       ) {
         return;
       }
+      const previousEnglish = liveEnglishSegmentRef.current[target];
       if (target === "buyer") {
         setBuyerEnglishTranscript((current) =>
-          appendUniqueTranscript(current, data.translation || ""),
+          replaceStreamingTranscript(
+            current,
+            previousEnglish,
+            data.translation || "",
+          ),
         );
       } else {
         setSupplierEnglishTranscript((current) =>
-          appendUniqueTranscript(current, data.translation || ""),
+          replaceStreamingTranscript(
+            current,
+            previousEnglish,
+            data.translation || "",
+          ),
         );
       }
+      liveEnglishSegmentRef.current[target] = data.translation;
     } catch {
       // The original transcript remains usable when translation is unavailable.
     }
+  }
+
+  function beginLiveTranscriptTurn(target: RecordingTarget) {
+    liveTranscriptSegmentRef.current[target] = "";
+    liveEnglishSegmentRef.current[target] = "";
+    liveTranscriptAtRef.current[target] = 0;
+    liveTranslationGenerationRef.current[target] += 1;
+    const translationTimer = liveTranslationTimerRef.current[target];
+    if (translationTimer) clearTimeout(translationTimer);
+    liveTranslationTimerRef.current[target] = null;
+    const understandTimer = liveUnderstandTimerRef.current[target];
+    if (understandTimer) clearTimeout(understandTimer);
+    liveUnderstandTimerRef.current[target] = null;
+  }
+
+  function updateLiveTranscript(target: RecordingTarget, content: string) {
+    const cleanContent = content.trim();
+    if (!cleanContent) return;
+
+    const now = Date.now();
+    if (now - liveTranscriptAtRef.current[target] > 8_000) {
+      beginLiveTranscriptTurn(target);
+    }
+    const previousHypothesis = liveTranscriptSegmentRef.current[target];
+    if (target === "buyer") {
+      setBuyerTranscript((current) =>
+        replaceStreamingTranscript(current, previousHypothesis, cleanContent),
+      );
+    } else {
+      setSupplierTranscript((current) =>
+        replaceStreamingTranscript(current, previousHypothesis, cleanContent),
+      );
+    }
+    liveTranscriptSegmentRef.current[target] = cleanContent;
+    liveTranscriptAtRef.current[target] = now;
+
+    const translationTimer = liveTranslationTimerRef.current[target];
+    if (translationTimer) clearTimeout(translationTimer);
+    liveTranslationTimerRef.current[target] = setTimeout(() => {
+      void appendEnglishTranslation(cleanContent, target);
+    }, 450);
+
+    const understandTimer = liveUnderstandTimerRef.current[target];
+    if (understandTimer) clearTimeout(understandTimer);
+    liveUnderstandTimerRef.current[target] = setTimeout(() => {
+      if (target === "buyer") {
+        queueBuyerUnderstanding(cleanContent);
+      } else {
+        queueSupplierUnderstanding(cleanContent);
+      }
+    }, 650);
   }
 
   async function stopLiveAgent() {
@@ -718,6 +802,7 @@ export function KaroboliApp() {
     if (liveSessionRef.current) await stopLiveAgent();
 
     const activeSupplier = suppliers.find((s) => s.name === selectedSupplier);
+    beginLiveTranscriptTurn(role);
 
     const session = new SamvaadBrowserSession(
       {
@@ -734,6 +819,9 @@ export function KaroboliApp() {
             !current || text.startsWith(current) ? text : `${current}${text}`,
           ),
         onEvent: (event) => {
+          if (event.includes("user_speech_start")) {
+            beginLiveTranscriptTurn(role);
+          }
           if (
             event.includes("interaction_end") ||
             event === "gateway.session_closed"
@@ -745,19 +833,7 @@ export function KaroboliApp() {
         onError: (message) => setError(message),
         onTranscript: ({ role: speaker, content }) => {
           if (!speaker.toLowerCase().includes("user") || !content.trim()) return;
-          if (role === "buyer") {
-            setBuyerTranscript((current) =>
-              appendUniqueTranscript(current, content),
-            );
-            void appendEnglishTranslation(content, "buyer");
-            queueBuyerUnderstanding(content);
-          } else {
-            setSupplierTranscript((current) =>
-              appendUniqueTranscript(current, content),
-            );
-            void appendEnglishTranslation(content, "supplier");
-            queueSupplierUnderstanding(content);
-          }
+          updateLiveTranscript(role, content);
         },
       },
     );
@@ -913,6 +989,8 @@ export function KaroboliApp() {
     const previousCaseId = caseId;
     const nextCaseId = crypto.randomUUID();
     stopAgentBrief();
+    beginLiveTranscriptTurn("buyer");
+    beginLiveTranscriptTurn("supplier");
     if (recorderRef.current?.state !== "inactive") {
       discardRecordingRef.current = true;
       recorderRef.current?.stop();
