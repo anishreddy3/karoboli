@@ -85,6 +85,7 @@ export class SamvaadBrowserSession {
 
   async start(): Promise<void> {
     this.callbacks.onStatus("connecting");
+    await this.startMicrophone();
     const sessionResponse = await fetch("/api/agent/session", { method: "POST" });
     if (!sessionResponse.ok) {
       const body = (await sessionResponse.json().catch(() => null)) as {
@@ -100,8 +101,12 @@ export class SamvaadBrowserSession {
     await new Promise<void>((resolve, reject) => {
       const socket = new WebSocket(session.gatewayUrl);
       this.socket = socket;
+      let settled = false;
       const timeout = window.setTimeout(
-        () => reject(new Error("Samvaad gateway connection timed out.")),
+        () => {
+          settled = true;
+          reject(new Error("Samvaad gateway connection timed out."));
+        },
         12_000,
       );
 
@@ -116,16 +121,26 @@ export class SamvaadBrowserSession {
       };
       socket.onerror = () => {
         window.clearTimeout(timeout);
-        reject(new Error("Could not connect to the Samvaad gateway."));
+        if (!settled) {
+          settled = true;
+          reject(new Error("Could not connect to the Samvaad gateway."));
+        }
       };
       socket.onclose = () => {
+        window.clearTimeout(timeout);
         this.cleanupAudio();
         this.callbacks.onStatus("ended");
+        this.callbacks.onEvent("gateway.session_closed");
+        if (!settled) {
+          settled = true;
+          reject(new Error("Samvaad gateway closed before the session was ready."));
+        }
       };
       socket.onmessage = (event) => {
         const message = JSON.parse(event.data as string) as Record<string, unknown>;
         if (message.type === "ready") {
           window.clearTimeout(timeout);
+          settled = true;
           resolve();
           return;
         }
@@ -134,7 +149,6 @@ export class SamvaadBrowserSession {
     });
 
     if (this.stopped) return;
-    await this.startMicrophone();
     this.callbacks.onStatus("listening");
   }
 

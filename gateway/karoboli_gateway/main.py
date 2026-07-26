@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 from typing import Any
@@ -162,8 +163,12 @@ async def agent_socket(websocket: WebSocket) -> None:
                 }
             )
 
+        upstream_ended = asyncio.Event()
+
         async def on_event(message: Any) -> None:
             payload = _message_payload(message)
+            if payload.get("type") == "server.action.interaction_end":
+                upstream_ended.set()
             await send_to_client(
                 {
                     "type": "agent_event",
@@ -192,7 +197,8 @@ async def agent_socket(websocket: WebSocket) -> None:
             base_url=settings.sarvam_runtime_base_url,
         )
         await agent.start()
-        await agent.wait_for_connect(timeout=10)
+        if not await agent.wait_for_connect(timeout=10):
+            raise RuntimeError("Sarvam agent did not connect in time.")
         await send_to_client(
             {
                 "type": "ready",
@@ -201,22 +207,67 @@ async def agent_socket(websocket: WebSocket) -> None:
             }
         )
 
-        while True:
-            message = await websocket.receive_json()
-            message_type = message.get("type")
-            if message_type == "audio":
-                encoded = str(message.get("data", ""))
-                if len(encoded) > 350_000:
-                    raise ValueError("Audio chunk is too large.")
-                await agent.send_audio(base64.b64decode(encoded, validate=True))
-            elif message_type == "text":
-                await agent.send_text(str(message.get("data", ""))[:4000])
-            elif message_type == "stop":
-                break
-            else:
-                await websocket.send_json(
-                    {"type": "warning", "message": "Unsupported client message."}
-                )
+        async def receive_client_messages() -> str:
+            while True:
+                message = await websocket.receive_json()
+                message_type = message.get("type")
+                if message_type == "audio":
+                    encoded = str(message.get("data", ""))
+                    if len(encoded) > 350_000:
+                        raise ValueError("Audio chunk is too large.")
+                    if not agent.is_connected():
+                        return "upstream-disconnected"
+                    try:
+                        await agent.send_audio(
+                            base64.b64decode(encoded, validate=True)
+                        )
+                    except Exception:
+                        if not agent.is_connected():
+                            return "upstream-disconnected"
+                        raise
+                elif message_type == "text":
+                    if not agent.is_connected():
+                        return "upstream-disconnected"
+                    try:
+                        await agent.send_text(str(message.get("data", ""))[:4000])
+                    except Exception:
+                        if not agent.is_connected():
+                            return "upstream-disconnected"
+                        raise
+                elif message_type == "stop":
+                    return "client-stop"
+                else:
+                    await websocket.send_json(
+                        {
+                            "type": "warning",
+                            "message": "Unsupported client message.",
+                        }
+                    )
+
+        receiver_task = asyncio.create_task(receive_client_messages())
+        disconnect_task = asyncio.create_task(agent.wait_for_disconnect())
+        done, pending = await asyncio.wait(
+            {receiver_task, disconnect_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        receiver_result = (
+            await receiver_task if receiver_task in done else "upstream-disconnected"
+        )
+        for task in pending:
+            task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
+
+        if receiver_result == "upstream-disconnected" and not upstream_ended.is_set():
+            await send_to_client(
+                {
+                    "type": "agent_event",
+                    "event": "server.action.interaction_end",
+                    "payload": {
+                        "type": "server.action.interaction_end",
+                        "reason": "upstream_disconnected",
+                    },
+                }
+            )
     except WebSocketDisconnect:
         pass
     except Exception as error:

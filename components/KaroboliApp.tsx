@@ -353,7 +353,10 @@ export function KaroboliApp() {
             !current || text.startsWith(current) ? text : `${current}${text}`,
           ),
         onEvent: (event) => {
-          if (event.includes("interaction_end")) {
+          if (
+            event.includes("interaction_end") ||
+            event === "gateway.session_closed"
+          ) {
             setLiveRole(null);
             liveSessionRef.current = null;
           }
