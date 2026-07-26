@@ -1,4 +1,4 @@
-CREATE TABLE `procurement_cases` (
+CREATE TABLE IF NOT EXISTS `procurement_cases` (
 	`id` text PRIMARY KEY NOT NULL,
 	`owner_id` text NOT NULL,
 	`schema_version` integer DEFAULT 1 NOT NULL,
@@ -7,6 +7,9 @@ CREATE TABLE `procurement_cases` (
 	`selected_supplier` text NOT NULL,
 	`buyer_transcript` text DEFAULT '' NOT NULL,
 	`supplier_transcript` text DEFAULT '' NOT NULL,
+	`buyer_english_transcript` text DEFAULT '' NOT NULL,
+	`supplier_english_transcript` text DEFAULT '' NOT NULL,
+	`seller_brief_language` text DEFAULT 'en-IN' NOT NULL,
 	`requirement_json` text,
 	`offer_json` text,
 	`decision_json` text,
