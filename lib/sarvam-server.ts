@@ -7,6 +7,16 @@ export class ProviderUnavailableError extends Error {
   }
 }
 
+export class SarvamRequestError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly detail: string,
+  ) {
+    super(`Sarvam request failed (${status}): ${detail}`);
+    this.name = "SarvamRequestError";
+  }
+}
+
 export function sarvamConfigured(): boolean {
   return Boolean(process.env.SARVAM_API_KEY);
 }
@@ -32,7 +42,7 @@ export async function sarvamFetch(
 
   if (!response.ok) {
     const detail = (await response.text()).slice(0, 600);
-    throw new Error(`Sarvam request failed (${response.status}): ${detail}`);
+    throw new SarvamRequestError(response.status, detail);
   }
 
   return response;
@@ -40,15 +50,24 @@ export async function sarvamFetch(
 
 export function providerErrorResponse(error: unknown): Response {
   const unavailable = error instanceof ProviderUnavailableError;
-  console.error(error);
+  const providerFailure = error instanceof SarvamRequestError;
+  const safeDetail = providerFailure
+    ? error.detail.replace(/\s+/g, " ").slice(0, 240)
+    : "";
+  console.error(
+    "Sarvam provider error:",
+    error instanceof Error ? error.message : String(error),
+  );
   return Response.json(
     {
       error: unavailable
         ? "Sarvam is not configured. Add SARVAM_API_KEY and retry."
-        : "Sarvam could not complete this request. Retry or use the disclosed fallback case.",
+        : providerFailure
+          ? `Sarvam rejected this request (${error.status}). ${safeDetail}`
+          : "Sarvam could not complete this request. Retry or use the disclosed fallback case.",
       code: unavailable ? "PROVIDER_NOT_CONFIGURED" : "PROVIDER_REQUEST_FAILED",
+      providerStatus: providerFailure ? error.status : undefined,
     },
     { status: unavailable ? 503 : 502 },
   );
 }
-

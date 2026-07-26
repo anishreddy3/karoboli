@@ -116,7 +116,14 @@ export function KaroboliApp() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       chunksRef.current = [];
       targetRef.current = target;
-      const recorder = new MediaRecorder(stream);
+      const preferredMimeType = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4",
+      ].find((type) => MediaRecorder.isTypeSupported(type));
+      const recorder = preferredMimeType
+        ? new MediaRecorder(stream, { mimeType: preferredMimeType })
+        : new MediaRecorder(stream);
       recorderRef.current = recorder;
       recorder.ondataavailable = (event) => {
         if (event.data.size) chunksRef.current.push(event.data);
@@ -148,7 +155,8 @@ export function KaroboliApp() {
     setError("");
     try {
       const form = new FormData();
-      form.set("audio", audio, `karoboli-${target}.webm`);
+      const extension = audio.type.includes("mp4") ? "m4a" : "webm";
+      form.set("audio", audio, `karoboli-${target}.${extension}`);
       form.set("mode", "codemix");
       form.set("language", target === "buyer" ? language : "unknown");
       const transcriptResponse = await fetch("/api/speech/transcribe", {
