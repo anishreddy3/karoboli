@@ -24,6 +24,7 @@ import {
 type Stage = "brief" | "supplier" | "decision";
 type RecordingTarget = "buyer" | "supplier";
 type CapabilityStatus = "checking" | "live" | "offline";
+type BuyerLanguage = Language | "unknown";
 
 const suppliers = [
   {
@@ -46,7 +47,8 @@ const suppliers = [
   },
 ];
 
-const languageLabels: Record<Language, string> = {
+const languageLabels: Record<BuyerLanguage, string> = {
+  unknown: "Auto-detect language",
   "te-IN": "Telugu",
   "ta-IN": "Tamil",
   "hi-IN": "Hindi / Hinglish",
@@ -149,7 +151,7 @@ async function browserAudioToWav(blob: Blob): Promise<Blob> {
 export function KaroboliApp() {
   const [stage, setStage] = useState<Stage>("brief");
   const [capability, setCapability] = useState<CapabilityStatus>("checking");
-  const [language, setLanguage] = useState<Language>("te-IN");
+  const [language, setLanguage] = useState<BuyerLanguage>("unknown");
   const [recording, setRecording] = useState<RecordingTarget | null>(null);
   const [busy, setBusy] = useState<RecordingTarget | "voice" | null>(null);
   const [buyerTranscript, setBuyerTranscript] = useState("");
@@ -449,7 +451,7 @@ export function KaroboliApp() {
       <section className="workspace">
         <aside className="steps" aria-label="Demo steps">
           {[
-            ["01", "Buyer brief", "Speak in Telugu, Tamil or English"],
+            ["01", "Buyer brief", "Speak in any supported language"],
             ["02", "Supplier offer", "Capture Hinglish corrections"],
             ["03", "Decision", "Guardrails, PO and evidence"],
           ].map(([number, label, detail], index) => {
@@ -510,16 +512,19 @@ export function KaroboliApp() {
                   <span className="section-kicker">STEP 1 · BUYER</span>
                   <h2>What do you need?</h2>
                   <p>
-                    Speak naturally. Mix languages, revise yourself, and include
-                    product, quantity, location, deadline and budget.
+                    Speak naturally in your language. Mix languages, revise
+                    yourself, and include product, quantity, location, deadline
+                    and budget.
                   </p>
                 </div>
                 <select
                   value={language}
-                  onChange={(event) => setLanguage(event.target.value as Language)}
+                  onChange={(event) =>
+                    setLanguage(event.target.value as BuyerLanguage)
+                  }
                   aria-label="Buyer language"
                 >
-                  {(Object.keys(languageLabels) as Language[]).map((code) => (
+                  {(Object.keys(languageLabels) as BuyerLanguage[]).map((code) => (
                     <option key={code} value={code}>
                       {languageLabels[code]}
                     </option>
@@ -545,7 +550,7 @@ export function KaroboliApp() {
                     ? "Stop & process"
                     : busy === "buyer"
                       ? "Sarvam is listening…"
-                      : `Record in ${languageLabels[language]}`}
+                      : "Record buyer brief"}
                 </button>
                 <p>Best under 30 seconds · microphone only leaves for transcription</p>
               </div>
@@ -893,11 +898,11 @@ export function KaroboliApp() {
       </section>
 
       <section className="score-strip">
-        <div>
-          <span>01</span>
-          <strong>Native input</strong>
-          <small>Telugu · Tamil · English</small>
-        </div>
+          <div>
+            <span>01</span>
+            <strong>Native input</strong>
+            <small>Auto-detected multilingual speech</small>
+          </div>
         <div>
           <span>02</span>
           <strong>Real code-mixing</strong>

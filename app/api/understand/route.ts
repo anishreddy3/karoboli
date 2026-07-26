@@ -12,7 +12,7 @@ const requestSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("buyer"),
     transcript: z.string().min(2).max(4000),
-    language: languageSchema.default("te-IN"),
+    language: z.union([languageSchema, z.literal("unknown")]).default("unknown"),
   }),
   z.object({
     kind: z.literal("supplier"),
