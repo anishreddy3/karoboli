@@ -48,16 +48,19 @@ const buyerJsonSchema = {
     properties: {
       product: { type: "string" },
       specification: { type: "string" },
-      quantity: { type: "number" },
+      quantity: { type: "number", minimum: 0 },
       unit: { type: "string" },
       deliveryLocation: { type: "string" },
       requiredBy: {
         type: "string",
-        pattern: "^\\d{4}-\\d{2}-\\d{2}$",
-        description: "ISO date, YYYY-MM-DD. Convert relative or spoken dates using 2026-07-26 as today.",
+        pattern: "^(?:\\d{4}-\\d{2}-\\d{2}|unknown)$",
+        description: "ISO date, YYYY-MM-DD. Convert relative or spoken dates using 2026-07-26 as today. Use unknown when absent.",
       },
-      maximumBudget: { type: "number" },
-      preferredPaymentTerm: { type: "string", enum: paymentTerms },
+      maximumBudget: { type: "number", minimum: 0 },
+      preferredPaymentTerm: {
+        type: "string",
+        enum: [...paymentTerms, "unknown"],
+      },
       constraints: { type: "array", items: { type: "string" } },
       normalizedSummary: { type: "string" },
       missingFields: {
@@ -182,7 +185,7 @@ export async function POST(request: Request) {
           "missingFields may contain only these buyer-commercial fields: product, specification, quantity, unit, deliveryLocation, requiredBy, maximumBudget, preferredPaymentTerm.",
           "Do not request supplier name, supplier contact, full street address, payment method, or any field outside that list.",
           "An area or site name is a sufficient deliveryLocation. A stated payment timing such as payment on delivery is a sufficient preferredPaymentTerm.",
-          "Never invent missing facts. If and only if one of the allowed fields is absent or ambiguous, use a conservative placeholder, list that field in missingFields, and set needsConfirmation true.",
+          "Never invent missing facts. For an absent numeric field use 0; for an absent date or payment term use 'unknown'; for another absent string field use 'unknown'. List every absent or ambiguous allowed field in missingFields and set needsConfirmation true.",
           "If missingFields is empty, needsConfirmation must be false.",
           "Convert spoken dates to ISO dates. normalizedSummary must be concise English.",
         ].join(" "),

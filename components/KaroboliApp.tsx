@@ -550,10 +550,31 @@ export function KaroboliApp() {
                 <>
                   <div className="facts-grid">
                     <Fact label="ITEM" value={`${requirement.product} · ${requirement.specification}`} />
-                    <Fact label="QUANTITY" value={`${requirement.quantity} ${requirement.unit}`} />
+                    <Fact
+                      label="QUANTITY"
+                      value={
+                        requirement.quantity > 0
+                          ? `${requirement.quantity} ${requirement.unit}`
+                          : "Needs confirmation"
+                      }
+                    />
                     <Fact label="DELIVER TO" value={requirement.deliveryLocation} />
-                    <Fact label="REQUIRED BY" value={formatDate(requirement.requiredBy)} />
-                    <Fact label="MAXIMUM BUDGET" value={money(requirement.maximumBudget)} />
+                    <Fact
+                      label="REQUIRED BY"
+                      value={
+                        requirement.requiredBy === "unknown"
+                          ? "Needs confirmation"
+                          : formatDate(requirement.requiredBy)
+                      }
+                    />
+                    <Fact
+                      label="MAXIMUM BUDGET"
+                      value={
+                        requirement.maximumBudget > 0
+                          ? money(requirement.maximumBudget)
+                          : "Needs confirmation"
+                      }
+                    />
                     <Fact label="PAYMENT" value={requirement.preferredPaymentTerm} />
                   </div>
                   {requirement.needsConfirmation ? (

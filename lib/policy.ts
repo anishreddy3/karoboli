@@ -12,6 +12,14 @@ function dateAtMidnight(value: string): number {
 }
 
 export function buildGuardrails(requirement: BuyerRequirement): Guardrails {
+  if (
+    requirement.maximumBudget <= 0 ||
+    requirement.requiredBy === "unknown" ||
+    requirement.preferredPaymentTerm === "unknown"
+  ) {
+    throw new Error("Cannot build guardrails from an incomplete buyer requirement.");
+  }
+
   return {
     targetTotal: Math.round(requirement.maximumBudget * 0.94),
     autonomousCeiling: Math.round(requirement.maximumBudget * 0.98),
