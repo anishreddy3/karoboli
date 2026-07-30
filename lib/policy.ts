@@ -104,18 +104,28 @@ export function evaluateOffer(
     };
   }
 
-  if (!budgetOkay || !deliveryOkay || !paymentOkay || !freightOkay) {
-    return {
-      action: "reject",
-      reasons: checks.filter((check) => !check.passed).map((check) => check.label),
-      checks,
-    };
-  }
+  if (
+    !budgetOkay ||
+    !deliveryOkay ||
+    !paymentOkay ||
+    !freightOkay ||
+    !autonomousOkay
+  ) {
+    const failedCheckLabels = checks
+      .filter((check) => !check.passed)
+      .map((check) => check.label);
 
-  if (!autonomousOkay || !complete) {
+    if (!budgetOkay || !deliveryOkay || !paymentOkay || !freightOkay) {
+      return {
+        action: "reject",
+        reasons: failedCheckLabels,
+        checks,
+      };
+    }
+
     return {
       action: "human-approval",
-      reasons: checks.filter((check) => !check.passed).map((check) => check.label),
+      reasons: failedCheckLabels,
       checks,
     };
   }
