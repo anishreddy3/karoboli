@@ -63,6 +63,19 @@ npm run build
 npm test
 ```
 
+Focused suites (also included in `npm test`):
+
+```bash
+npm run test:policy   # deterministic offer / PO policy
+npm run test:sarvam   # Sarvam server helpers and error mapping
+npm run test:domain   # Milestone 2 domain fixtures
+```
+
+## Testing and security notes
+
+- Policy decisions are covered by unit tests; hard budget, deadline, payment, and freight rules stay deterministic (not LLM-judged).
+- `/api/understand` fences live transcript text and strips forged `</transcript>` tags before prompting, so model input cannot be steered by speaker content alone.
+
 ## Architecture
 
 ```text
