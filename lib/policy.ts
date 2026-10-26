@@ -65,17 +65,17 @@ export function evaluateOffer(
     {
       label: "Absolute budget",
       passed: budgetOkay,
-      detail: `₹${offer.totalPrice.toLocaleString("en-IN")} ≤ ₹${guardrails.absoluteBudget.toLocaleString("en-IN")}`,
+      detail: `\u20b9${offer.totalPrice.toLocaleString("en-IN")} \u2264 \u20b9${guardrails.absoluteBudget.toLocaleString("en-IN")}`,
     },
     {
       label: "Autonomy ceiling",
       passed: autonomousOkay,
-      detail: `₹${offer.totalPrice.toLocaleString("en-IN")} ≤ ₹${guardrails.autonomousCeiling.toLocaleString("en-IN")}`,
+      detail: `\u20b9${offer.totalPrice.toLocaleString("en-IN")} \u2264 \u20b9${guardrails.autonomousCeiling.toLocaleString("en-IN")}`,
     },
     {
       label: "Delivery deadline",
       passed: deliveryOkay,
-      detail: `${offer.deliveryDate} ≤ ${guardrails.requiredBy}`,
+      detail: `${offer.deliveryDate} \u2264 ${guardrails.requiredBy}`,
     },
     {
       label: "Payment term",
@@ -104,18 +104,22 @@ export function evaluateOffer(
     };
   }
 
+  const failedCheckLabels = checks
+    .filter((check) => !check.passed)
+    .map((check) => check.label);
+
   if (!budgetOkay || !deliveryOkay || !paymentOkay || !freightOkay) {
     return {
       action: "reject",
-      reasons: checks.filter((check) => !check.passed).map((check) => check.label),
+      reasons: failedCheckLabels,
       checks,
     };
   }
 
-  if (!autonomousOkay || !complete) {
+  if (!autonomousOkay) {
     return {
       action: "human-approval",
-      reasons: checks.filter((check) => !check.passed).map((check) => check.label),
+      reasons: failedCheckLabels,
       checks,
     };
   }
@@ -123,7 +127,7 @@ export function evaluateOffer(
   return {
     action: "auto-accept",
     reasons: [
-      `Offer is ₹${(guardrails.autonomousCeiling - offer.totalPrice).toLocaleString("en-IN")} below the autonomy ceiling`,
+      `Offer is \u20b9${(guardrails.autonomousCeiling - offer.totalPrice).toLocaleString("en-IN")} below the autonomy ceiling`,
       "Delivery and commercial commitments satisfy policy",
     ],
     checks,
