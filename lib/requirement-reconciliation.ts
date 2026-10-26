@@ -20,6 +20,9 @@ export const buyerFieldNames = [
 ] as const;
 
 const referenceToday = new Date("2026-07-26T00:00:00Z");
+const referenceYear = referenceToday.getUTCFullYear();
+const earliestTime = referenceToday.getTime();
+const latestTime = new Date("2027-07-26T00:00:00Z").getTime();
 
 function knownString(next: string, previous?: string): string {
   return next.toLowerCase() === "unknown" && previous ? previous : next;
@@ -30,18 +33,18 @@ function knownNumber(next: number, previous?: number): number {
 }
 
 const monthAliases: Array<[number, string[]]> = [
-  [1, ["january", "jan", "జనవరి", "ஜனவரி", "जनवरी"]],
-  [2, ["february", "feb", "ఫిబ్రవరి", "பிப்ரவரி", "फरवरी"]],
-  [3, ["march", "mar", "మార్చి", "மார்ச்", "मार्च"]],
-  [4, ["april", "apr", "ఏప్రిల్", "ஏப்ரல்", "अप्रैल"]],
-  [5, ["may", "మే", "மே", "मई"]],
-  [6, ["june", "jun", "జూన్", "ஜூன்", "जून"]],
-  [7, ["july", "jul", "జూలై", "జులై", "ஜூலை", "जुलाई"]],
-  [8, ["august", "aug", "ఆగస్టు", "ஆகஸ்ட்", "अगस्त"]],
-  [9, ["september", "sep", "సెప్టెంబర్", "செப்டம்பர்", "सितंबर"]],
-  [10, ["october", "oct", "అక్టోబర్", "அக்டோபர்", "अक्टूबर"]],
-  [11, ["november", "nov", "నవంబర్", "நவம்பர்", "नवंबर"]],
-  [12, ["december", "dec", "డిసెంబర్", "டிசம்பர்", "दिसंबर"]],
+  [1, ["january", "jan", "\u0c1c\u0c28\u0c35\u0c30\u0c3f", "\u0b9c\u0ba9\u0bb5\u0bb0\u0bbf", "\u091c\u0928\u0935\u0930\u0940"]],
+  [2, ["february", "feb", "\u0c2b\u0c3f\u0c2c\u0c4d\u0c30\u0c35\u0c30\u0c3f", "\u0baa\u0bbf\u0baa\u0bcd\u0bb0\u0bb5\u0bb0\u0bbf", "\u092b\u0930\u0935\u0930\u0940"]],
+  [3, ["march", "mar", "\u0c2e\u0c3e\u0c30\u0c4d\u0c1a\u0c3f", "\u0bae\u0bbe\u0bb0\u0bcd\u0b9a\u0bcd", "\u092e\u093e\u0930\u094d\u091a"]],
+  [4, ["april", "apr", "\u0c0f\u0c2a\u0c4d\u0c30\u0c3f\u0c32\u0c4d", "\u0b8f\u0baa\u0bcd\u0bb0\u0bb2\u0bcd", "\u0905\u092a\u094d\u0930\u0948\u0932"]],
+  [5, ["may", "\u0c2e\u0c47", "\u0bae\u0bc7", "\u092e\u0908"]],
+  [6, ["june", "jun", "\u0c1c\u0c42\u0c28\u0c4d", "\u0b9c\u0bc2\u0ba9\u0bcd", "\u091c\u0942\u0928"]],
+  [7, ["july", "jul", "\u0c1c\u0c42\u0c32\u0c48", "\u0c1c\u0c41\u0c32\u0c48", "\u0b9c\u0bc2\u0bb2\u0bc8", "\u091c\u0941\u0932\u093e\u0908"]],
+  [8, ["august", "aug", "\u0c06\u0c17\u0c38\u0c4d\u0c1f\u0c41", "\u0b86\u0b95\u0bb8\u0bcd\u0b9f\u0bcd", "\u0905\u0917\u0938\u094d\u0924"]],
+  [9, ["september", "sep", "\u0c38\u0c46\u0c2a\u0c4d\u0c1f\u0c46\u0c02\u0c2c\u0c30\u0c4d", "\u0b9a\u0bc6\u0baa\u0bcd\u0b9f\u0bae\u0bcd\u0baa\u0bb0\u0bcd", "\u0938\u093f\u0924\u0902\u092c\u0930"]],
+  [10, ["october", "oct", "\u0c05\u0c15\u0c4d\u0c1f\u0c4b\u0c2c\u0c30\u0c4d", "\u0b85\u0b95\u0bcd\u0b9f\u0bcb\u0baa\u0bb0\u0bcd", "\u0905\u0915\u094d\u091f\u0942\u092c\u0930"]],
+  [11, ["november", "nov", "\u0c28\u0c35\u0c02\u0c2c\u0c30\u0c4d", "\u0ba8\u0bb5\u0bae\u0bcd\u0baa\u0bb0\u0bcd", "\u0928\u0935\u0902\u092c\u0930"]],
+  [12, ["december", "dec", "\u0c21\u0c3f\u0c38\u0c46\u0c02\u0c2c\u0c30\u0c4d", "\u0b9f\u0bbf\u0b9a\u0bae\u0bcd\u0baa\u0bb0\u0bcd", "\u0926\u093f\u0938\u0902\u092c\u0930"]],
 ];
 
 const englishDays: Record<string, number> = {
@@ -127,19 +130,19 @@ export function dateFromSpokenMonth(transcript: string): string | null {
   }
 
   if (
-    /day after tomorrow|ఎల్లుండి|நாளை மறுநாள்|परसों/.test(normalized)
+    /day after tomorrow|\u0c0e\u0c32\u0c4d\u0c32\u0c41\u0c02\u0c21\u0c3f|\u0ba8\u0bbe\u0bb3\u0bc8 \u0bae\u0bb1\u0bc1\u0ba8\u0bbe\u0bb3\u0bcd|\u092a\u0930\u0938\u094b\u0902/.test(normalized)
   ) {
     return addReferenceDays(2);
   }
-  if (/\btomorrow\b|రేపు|நாளை|कल/.test(normalized)) {
+  if (/\btomorrow\b|\u0c30\u0c47\u0c2a\u0c41|\u0ba8\u0bbe\u0bb3\u0bc8|\u0915\u0932/.test(normalized)) {
     return addReferenceDays(1);
   }
-  if (/\btoday\b|ఈరోజు|నేడు|இன்று|आज/.test(normalized)) {
+  if (/\btoday\b|\u0c08\u0c30\u0c4b\u0c1c\u0c41|\u0c28\u0c47\u0c21\u0c41|\u0b87\u0ba9\u0bcd\u0bb1\u0bc1|\u0906\u091c/.test(normalized)) {
     return addReferenceDays(0);
   }
 
   const withinDays = normalized.match(
-    /(?:within|in)\s+(\d{1,2})\s+days?|(\d{1,2})\s*(?:రోజుల్లో|நாட்களில்|दिनों में)/,
+    /(?:within|in)\s+(\d{1,2})\s+days?|(\d{1,2})\s*(?:\u0c30\u0c4b\u0c1c\u0c41\u0c32\u0c4d\u0c32\u0c4b|\u0ba8\u0bbe\u0b9f\u0bcd\u0b95\u0bb3\u0bbf\u0bb2\u0bcd|\u0926\u093f\u0928\u094b\u0902 \u092e\u0947\u0902)/,
   );
   if (withinDays) {
     const days = Number(withinDays[1] || withinDays[2]);
@@ -152,7 +155,7 @@ export function dateFromSpokenMonth(transcript: string): string | null {
   if (numeric) {
     const day = Number(numeric[1]);
     const month = Number(numeric[2]);
-    let year = Number(numeric[3] || referenceToday.getUTCFullYear());
+    let year = Number(numeric[3] || referenceYear);
     let date = validDate(year, month, day);
     if (date && date < referenceToday && !numeric[3]) {
       year += 1;
@@ -173,7 +176,7 @@ export function dateFromSpokenMonth(transcript: string): string | null {
       if (!day) continue;
       const explicitYear = nearby.match(/\b(20\d{2})\b/);
       let year = Number(
-        explicitYear?.[1] || referenceToday.getUTCFullYear(),
+        explicitYear?.[1] || referenceYear,
       );
       let date = validDate(year, month, day);
       if (date && date < referenceToday && !explicitYear) {
@@ -189,13 +192,11 @@ export function dateFromSpokenMonth(transcript: string): string | null {
 
 export function dateIsPlausible(value: string): boolean {
   if (value === "unknown") return false;
-  const date = new Date(`${value}T00:00:00Z`);
-  const earliest = referenceToday.getTime();
-  const latest = new Date("2027-07-26T00:00:00Z").getTime();
+  const time = new Date(`${value}T00:00:00Z`).getTime();
   return (
-    !Number.isNaN(date.getTime()) &&
-    date.getTime() >= earliest &&
-    date.getTime() <= latest
+    !Number.isNaN(time) &&
+    time >= earliestTime &&
+    time <= latestTime
   );
 }
 
