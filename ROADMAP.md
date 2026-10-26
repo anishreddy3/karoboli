@@ -1,31 +1,30 @@
 # Karoboli backlog
 
-Post-buildathon hardening items, consolidated from open issues so the issue tracker stays quiet until active work resumes.
+Post-buildathon hardening work that already exists as **open pull requests**. Leave them open until you intentionally merge or close each one — they are real branches with proposed changes, not empty issue stubs.
 
 ## Security
 
-- [ ] Fix LLM prompt injection via user transcript (#15)
+- [ ] #15 — Fix LLM prompt injection via user transcript
 
 ## Testing
 
-- [ ] Missing-key error test for `sarvamFetch` (#14)
-- [ ] Non-ok response test for `sarvamFetch` (#13)
-- [ ] Tests for `sarvamConfigured` helper (#11)
-- [ ] Coverage for `providerErrorResponse` (#10)
-- [ ] `evaluateOffer` happy-path tests (#8)
-- [ ] `evaluateOffer` rejection-path coverage (#7, #4, #5)
-- [ ] Tests for `ProviderUnavailableError` (#6)
-- [ ] Comprehensive `evaluateOffer` policy coverage (#5)
-- [ ] Tests for `createPurchaseOrder` in `policy.ts` (#3)
+- [ ] #14 — Missing-key error test for `sarvamFetch`
+- [ ] #13 — Non-ok response test for `sarvamFetch`
+- [ ] #11 — Tests for `sarvamConfigured` helper
+- [ ] #10 — Coverage for `providerErrorResponse`
+- [ ] #8 — `evaluateOffer` happy-path tests
+- [ ] #7 / #4 / #5 — `evaluateOffer` rejection / policy coverage
+- [ ] #6 — Tests for `ProviderUnavailableError`
+- [ ] #3 — Tests for `createPurchaseOrder` in `policy.ts`
 
 ## Performance
 
-- [ ] Optimize redundant array iteration in `evaluateOffer` (#16)
-- [ ] Optimize static date instantiation (#12)
-- [ ] Optimize `dateIsPlausible` (#9)
+- [ ] #16 — Optimize redundant array iteration in `evaluateOffer`
+- [ ] #12 — Optimize static date instantiation
+- [ ] #9 — Optimize `dateIsPlausible`
 
 ## Process
 
-- [ ] Merge milestones to `develop` (#2) — revisit only if multi-branch workflow returns
+- [ ] #2 — Merge milestones to `develop` (only if multi-branch workflow returns)
 
-Tracked issues were closed as **not planned** on 2026-10-26 during profile cleanup; reopen any item when picking it up.
+Added during profile cleanup on 2026-10-26 so the PR list has a single index.
